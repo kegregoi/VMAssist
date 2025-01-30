@@ -21,8 +21,8 @@
 param (
     [string]$outputPath = 'C:\logs',
     [switch]$fakeFinding,
-    [switch]$skipFirewall = $true,
-    [switch]$skipFilters = $true,
+    [switch]$skipFirewall,
+    [switch]$skipFilters,
     [switch]$useDotnetForNicDetails = $true,
     [switch]$showLog,
     [switch]$showReport,
@@ -45,7 +45,6 @@ trap
         vmId  = $vmId
         error = $trappedErrorString
     }
-    Send-Telemetry -properties $properties
     continue
 }
 
@@ -416,24 +415,27 @@ function Get-WfpFilters
 function Get-EnabledFirewallRules
 {
     Out-Log 'Getting enabled Windows firewall rules: ' -startLine
-    $getNetFirewallRuleDuration = Measure-Command {$enabledRules = Get-NetFirewallRule -Enabled True | Where-Object {$_.Direction -eq 'Inbound'}}
+    $getNetFirewallRuleDuration = Measure-Command {$enabledRules = Get-NetFirewallRule -Enabled True}
 
     $getNetFirewallPortFilterStartTime = Get-Date
 
     foreach ($enabledRule in $enabledRules)
     {
         $portFilter = $enabledRule | Get-NetFirewallPortFilter
+        $addressFilter = $enabledRule | Get-NetFirewallAddressFilter
         $enabledRule | Add-Member -MemberType NoteProperty -Name Protocol -Value $portFilter.Protocol
         $enabledRule | Add-Member -MemberType NoteProperty -Name LocalPort -Value $portFilter.LocalPort
         $enabledRule | Add-Member -MemberType NoteProperty -Name RemotePort -Value $portFilter.RemotePort
         $enabledRule | Add-Member -MemberType NoteProperty -Name IcmpType -Value $portFilter.IcmpType
         $enabledRule | Add-Member -MemberType NoteProperty -Name DynamicTarget -Value $portFilter.DynamicTarget
+        $enabledRule | Add-Member -MemberType NoteProperty -Name LocalAddress -Value $addressFilter.LocalAddress
+        $enabledRule | Add-Member -MemberType NoteProperty -Name RemoteAddress -Value $addressFilter.RemoteAddress
     }
     $getNetFirewallPortFilterEndTime = Get-Date
     $getNetFirewallPortFilterDuration = '{0:hh}:{0:mm}:{0:ss}.{0:ff}' -f (New-TimeSpan -Start $getNetFirewallPortFilterStartTime -End $getNetFirewallPortFilterEndTime)
 
-    $enabledInboundFirewallRules = $enabledRules | Where-Object {$_.Direction -eq 'Inbound'} | Select-Object DisplayName, Profile, Action, Protocol, LocalPort, RemotePort, IcmpType, DynamicTarget | Sort-Object DisplayName
-    $enabledOutboundFirewallRules = $enabledRules | Where-Object {$_.Direction -eq 'Outbound'} | Select-Object DisplayName, Profile, Action, Protocol, LocalPort, RemotePort, IcmpType, DynamicTarget | Sort-Object DisplayName
+    $enabledInboundFirewallRules = $enabledRules | Where-Object {$_.Direction -eq 'Inbound'} | Select-Object DisplayName, Profile, Action, Protocol, LocalPort, RemotePort, IcmpType, DynamicTarget, LocalAddress, RemoteAddress | Sort-Object DisplayName
+    $enabledOutboundFirewallRules = $enabledRules | Where-Object {$_.Direction -eq 'Outbound'} | Select-Object DisplayName, Profile, Action, Protocol, LocalPort, RemotePort, IcmpType, DynamicTarget, LocalAddress, RemoteAddress | Sort-Object DisplayName
     $enabledFirewallRules = [PSCustomObject]@{
         Inbound  = $enabledInboundFirewallRules
         Outbound = $enabledOutboundFirewallRules
@@ -1096,92 +1098,6 @@ function New-Finding
     }
     $findings.Add($finding)
     $global:dbgFinding = $finding
-}
-
-function Send-Telemetry
-{
-    param(
-        $properties
-    )
-
-    $ingestionDnsName = 'dc.services.visualstudio.com'
-    $dnsRecord = Resolve-DnsName -Name $ingestionDnsName -QuickTimeout -TcpOnly -Type A -ErrorAction SilentlyContinue
-    if ($dnsRecord)
-    {
-        $ip4Address = $dnsRecord.IP4Address
-        if ($ip4Address)
-        {
-            Out-Log "Sending telemetry to $ingestionDnsName ($ip4Address)"
-            $ingestionEndpointReachable = Test-Port -ipAddress $ip4Address -Port 443
-            $global:dbgingestionEndpointReachable = $ingestionEndpointReachable
-            if ($ingestionEndpointReachable.Succeeded)
-            {
-                $ingestionEndpoint = 'https://dc.services.visualstudio.com/v2/track'
-                $instrumentationKey = '82048970-8bf5-4f69-88d2-1951be268160'
-                $body = [PSCustomObject]@{
-                    'name' = "Microsoft.ApplicationInsights.$instrumentationKey.Event"
-                    'time' = ([System.dateTime]::UtcNow.ToString('o'))
-                    'iKey' = $instrumentationKey
-                    'data' = [PSCustomObject]@{
-                        'baseType' = 'EventData'
-                        'baseData' = [PSCustomObject]@{
-                            'ver'        = '2'
-                            'name'       = $scriptBaseName
-                            'properties' = $properties
-                        }
-                    }
-                }
-                $body = $body | ConvertTo-Json -Depth 10 -Compress
-                $headers = @{'Content-Type' = 'application/x-json-stream'; }
-                try
-                {
-                    $result = Invoke-RestMethod -Uri $ingestionEndpoint -Method Post -Headers $headers -Body $body -ErrorAction SilentlyContinue
-                }
-                catch
-                {
-                    $trappedError = $PSItem
-                    $global:trappedError = $trappedError
-                    $scriptLineNumber = $trappedError.InvocationInfo.ScriptLineNumber
-                    $line = $trappedError.InvocationInfo.Line.Trim()
-                    $exceptionMessage = $trappedError.Exception.Message
-                    $trappedErrorString = $trappedError.Exception.ErrorRecord | Out-String -ErrorAction SilentlyContinue
-                    if ($verbose -or $debug)
-                    {
-                        Out-Log "[ERROR] $exceptionMessage Line $scriptLineNumber $line" -color Red
-                    }
-                    else
-                    {
-                        Out-Log $exceptionMessage
-                    }
-                }
-
-                if ($result)
-                {
-                    $itemsReceived = $result | Select-Object -ExpandProperty itemsReceived
-                    $itemsAccepted = $result | Select-Object -ExpandProperty itemsAccepted
-                    $errors = $result | Select-Object -ExpandProperty errors
-                    $message = "Received: $itemsReceived Accepted: $itemsAccepted"
-                    if ($errors)
-                    {
-                        $message = "$message Errors: $errors"
-                        Out-Log $message
-                    }
-                    else
-                    {
-                        Out-Log $message
-                    }
-                }
-            }
-            else
-            {
-                Out-Log "Ingestion endpoint $($ip4Address):443 not reachable" -endLine
-            }
-        }
-        else
-        {
-            Out-Log "Could not resolve $ingestionDnsName to an IP address" -endLine
-        }
-    }
 }
 
 function Get-Drivers
@@ -2709,7 +2625,7 @@ $packagesFolderPath = "$env:SystemDrive\Packages"
 Out-Log "$packagesFolderPath folder has default permissions:" -startLine
 if ($isVMAgentInstalled)
 {
-    $packagesDefaultSddl = 'O:BAG:SYD:PAI(A;OICI;0x1200a9;;;WD)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+    $packagesDefaultSddl = 'O:BAG:SYD:P(A;OICI;0x1200a9;;;WD)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
     $packagesAcl = Get-Acl -Path $packagesFolderPath
     $packagesSddl = $packagesAcl | Select-Object -ExpandProperty Sddl
     $packagesAccess = $packagesAcl | Select-Object -ExpandProperty Access
@@ -2729,7 +2645,7 @@ if ($isVMAgentInstalled)
         $details = "$packagesFolderPath does not have default NTFS permissions<br>SDDL: $packagesSddl<br>$packagesAccessString"
         New-Check -name "$packagesFolderPath permissions" -result 'Info' -details $details
         $mitigation = '<a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-extension-certificates-issues-windows-vm#solution-2-fix-the-access-control-list-acl-in-the-machinekeys-or-systemkeys-folders">Troubleshoot extension certificates</a>'
-        New-Finding -type Information -name "Non-default $packagesFolderPath permissions" -description $details -mitigation $mitigation
+        New-Finding -type Information -name "Non-default $packagesFolderPath permissions" -description $details #-mitigation $mitigation
     }
 }
 else
@@ -3002,7 +2918,7 @@ else
 if ($winmgmt.Status -eq 'Running')
 {
     # Get-NetRoute depends on WMI (winmgmt service)
-    $routes = Get-NetRoute | Select-Object AddressFamily, State, ifIndex, InterfaceAlias, InstanceID, TypeOfRoute, RouteMetric, InterfaceMetric, DestinationPrefix, NextHop | Sort-Object InterfaceAlias
+    $routes = Get-NetRoute | Select-Object AddressFamily, State, ifIndex, InterfaceAlias, TypeOfRoute, RouteMetric, InterfaceMetric, DestinationPrefix, NextHop | Sort-Object InterfaceAlias
 }
 else
 {
@@ -3122,7 +3038,7 @@ $uninstallPaths = ('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
     'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
     'HKCU:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
 $software = Get-ItemProperty -Path $uninstallPaths -ErrorAction SilentlyContinue
-$software = $software | Where-Object {$_.DisplayName} | Select-Object DisplayName, DisplayVersion, Publisher | Sort-Object -Property DisplayName
+$software = $software | Where-Object {$_.DisplayName} | Select-Object DisplayName, DisplayVersion, Publisher, InstallDate | Sort-Object -Property DisplayName
 
 if ($winmgmt.Status -eq 'Running')
 {
@@ -3292,7 +3208,6 @@ $css = @'
             border: 1px solid;
             padding: 5px;
             text-align: left;
-            white-space: nowrap
         }
         td.CRITICAL {
             background: Salmon;
@@ -3614,12 +3529,35 @@ $vmAgentTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
 [void]$stringBuilder.Append('<div id="Extensions" class="tabcontent">')
+
+$windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
+$windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
+$aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
+$aggregateStatus = Get-Content -Path $aggregateStatusJsonFilePath
+$aggregateStatus = $aggregateStatus -replace '\0' | ConvertFrom-Json
+
+$handlerKeyNames = $aggregateStatus.aggregateStatus.handlerAggregateStatus
+
+$extension = [PSCustomObject]@{
+    handlerVersion = $null
+    handlerStatus = $null
+    sequenceNumber = $null
+    timestampUTC = $null
+    status = $null
+    message = $null
+}
+
 foreach ($handlerKeyName in $handlerKeyNames)
 {
-    $handlerName = Split-Path -Path $handlerKeyName -Leaf
+    $handlerName = Split-Path -Path $handlerKeyName.handlerName -Leaf
     [void]$stringBuilder.Append("<h3>$handlerName</h3>`r`n")
-    $handlerValues = $handlerStateKey | Where-Object {$_.SubkeyName -eq $handlerKeyName} | Select-Object ValueName, ValueData | Sort-Object ValueName
-    $vmHandlerValuesTable = $handlerValues | ConvertTo-Html -Fragment -As Table
+    $extension.handlerVersion = $handlerKeyName.handlerVersion
+    $extension.handlerStatus = $handlerKeyName.status
+    $extension.sequenceNumber = $handlerKeyName.runtimeSettingsStatus.sequenceNumber
+    $extension.timestampUTC = $handlerKeyName.runtimeSettingsStatus.settingsStatus.timestampUTC
+    $extension.status = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.status
+    $extension.message = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.formattedMessage.message
+    $vmHandlerValuesTable = $extension | ConvertTo-Html -Fragment -As Table
     $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 }
 [void]$stringBuilder.Append('</div>')
@@ -3717,17 +3655,6 @@ $checksJson = $checks | ConvertTo-Json -Depth 10
 $properties = [PSCustomObject]@{}
 $properties | Add-Member -MemberType NoteProperty -Name findingsCount -Value $findingsCount
 $vm | Sort-Object Property | ForEach-Object {$properties | Add-Member -MemberType NoteProperty -Name $_.Property -Value $_.Value}
-$properties | Add-Member -MemberType NoteProperty -Name checks -Value $checksJson
-if ($findingsCount -ge 1)
-{
-    $findingsJson = $findings | ConvertTo-Json -Depth 10
-    $properties | Add-Member -MemberType NoteProperty -Name findings -Value $findingsJson
-}
-else
-{
-    $properties | Add-Member -MemberType NoteProperty -Name findings -Value 'No issues found'
-}
-Send-Telemetry -properties $properties
 
 $global:dbgProperties = $properties
 $global:dbgvm = $vm
@@ -3800,169 +3727,6 @@ if ($showReport -and (Test-Path -Path $htmFilePath -PathType Leaf))
 23. Non-default packages permissions
 24. System drive low disk space
 25. DHCP-disabled NICs
-#>
-
-<# https://github.com/search?q=get-counter+language%3APowerShell&type=code&l=PowerShell
-$key = Get-ChildItem -Path 'HKLM:\SOFTWARE\Microsoft\Windows Azure\GuestAgentUpdateState' | where {[bool]($_.PSChildName -as [version]) -eq $true}
-# Build timeline of GA service starts/stops,Windows starts/stop to aid in RCA for transient "agent not ready"
-# .NET to check for ghost NICs - https://raw.githubusercontent.com/istvans/scripts/master/removeGhosts.ps1
-# Perhaps to diagnose credit exhaustion, query for Microsoft-Windows-Resource-Exhaustion-Detector warning/error events
-check for missing Message value in "HKLM\SOFTWARE\Microsoft\Windows Azure\GuestAgentUpdateState\<ga version>" and if missing, suggest deleting LatestExpectedVersion value in HKLM\SOFTWARE\Microsoft\Windows Azure\GuestAgentUpdateState)
-
-# get-winevent -ProviderName Microsoft-Windows-Resource-Exhaustion-Detector | Where-Object {$_.LevelDisplayName -ne 'Information'}
-# fltmc instances, fltmc filters, fltmc volumes
-DSregcmd /status
-	switch ((Get-ItemProperty -Path HKLM:\System\CurrentControlSet\Control\ProductOptions).ProductType)
-	{
-	  "WinNT"	 { return "WinNT"}
-	  "ServerNT" { return "ServerNT"}
-	  "LanmanNT" { return "LanmanNT"}
-	  Default	 {"EmptyProductType"}
-	}
-
-global:FwGetProxyInfo
-"netsh winhttp show proxy 					| Out-File -Append $outFile"
-"netsh winhttp show advproxy 2>> $global:ErrorLogFile | Out-File -Append $outFile"	#only works for Win11+
-"bitsadmin /util /getieproxy localsystem 	| Out-File -Append $outFile"
-"bitsadmin /util /getieproxy networkservice | Out-File -Append $outFile"
-"bitsadmin /util /getieproxy localservice 	| Out-File -Append $outFile"
-"WinHTTPDiag.exe -i | Out-File -Append $outFile"
-"REG.exe EXPORT `"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings`" $outFileIESettings /y"
-
-https://github.com/CSS-Identity/ADFS-Diag/blob/e803ab13ac4e85a3ed3d18508f16fec17fe0b261/helpermodules/proxysettings.psm1
-Already added proxysettings.psm1 GetProxySettings function to vmassist.ps1
-
-Check if constrained language mode is enabled:
-$ConstrainedLanguageMode = $ExecutionContext.SessionState.LanguageMode
-
-# NIC
-"Get-NetAdapter -IncludeHidden -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-# COM/DCOM/RPC
-"netsh rpc show int 2>&1 | Out-File -Append $BasicLogFolder\Net_rpcinfo.txt"
-"netsh rpc show settings 2>&1 | Out-File -Append $BasicLogFolder\Net_rpcinfo.txt"
-"netsh rpc filter show filter 2>&1 | Out-File -Append $BasicLogFolder\Net_rpcinfo.txt"
-
-"Get-NetIPAddress -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetIPInterface -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetIPConfiguration -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetIPv4Protocol -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetIPv6Protocol  -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetOffloadGlobalSetting -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetPrefixPolicy -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetRoute -IncludeAllCompartments -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetTCPConnection -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetTransportFilter -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetTCPSetting -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetUDPEndpoint -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-"Get-NetUDPSetting -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_TCPIP_pscmdlets.txt"
-# Firewall
-"Show-NetIPsecRule -PolicyStore ActiveStore -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_Firewall_info_pscmdlets.txt"
-"Get-NetIPsecMainModeSA -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_Firewall_info_pscmdlets.txt"
-"Get-NetIPsecQuickModeSA -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_Firewall_info_pscmdlets.txt"
-"Get-NetFirewallProfile -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_Firewall_info_pscmdlets.txt"
-"Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_Firewall_Get-NetFirewallRule.txt"
-"netsh advfirewall show allprofiles 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"netsh advfirewall show allprofiles state 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"netsh advfirewall show currentprofile 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"netsh advfirewall show domainprofile 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"netsh advfirewall show global 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"netsh advfirewall show privateprofile 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"netsh advfirewall show publicprofile 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"netsh advfirewall show store 2>&1 | Out-File -Append $BasicLogFolder\Net_Firewall_advfirewall.txt"
-"Copy-Item C:\Windows\System32\LogFiles\Firewall\pfirewall.log $BasicLogFolder\Net_Firewall_pfirewall.log -ErrorAction SilentlyContinue"
-# SMB
-"Get-SmbOpenFile -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_SMB_Server_info.txt"
-"Get-SmbSession -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_SMB_Server_info.txt"
-"Get-SmbWitnessClient -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_SMB_Server_info.txt"
-#NIC
-"Get-NetAdapterAdvancedProperty -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterBinding -AllBindings -IncludeHidden -ErrorAction Stop | select Name, InterfaceDescription, DisplayName, ComponentID, Enabled | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterChecksumOffload -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterEncapsulatedPacketTaskOffload -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterHardwareInfo -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterIPsecOffload -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterLso -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterPowerManagement -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterQos -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterRdma -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterRsc -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterRss -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterSriov -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterSriovVf -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterStatistics -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterVmq -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterVmqQueue -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-"Get-NetAdapterVPort -ErrorAction Stop | Out-File -Append $BasicLogFolder\Net_NetAdapterInfo.txt"
-
-# Basic
-"Get-CimInstance -Class CIM_Processor -ErrorAction Stop | fl * | Out-File -Append $BasicLogFolder\CPU_info.txt"
-# WER
-"Get-ChildItem `'HKLM:Software\Microsoft\Windows\Windows Error Reporting`' -Recurse | Out-File -Append $BasicLogFolder\_Reg_WER.txt"
-"Get-ItemProperty `'HKLM:System\CurrentControlSet\Control\CrashControl`' | Out-File -Append $BasicLogFolder\_Reg_Dump.txt"
-"Copy-Item `'C:\ProgramData\Microsoft\Windows\WER`' $BasicLogFolder -Recurse -ErrorAction SilentlyContinue"
-
-Get-CimInstance -Namespace root\cimv2\security\microsofttpm -class win32_tpm
-Get-Tpm -ErrorAction Ignore
-
-"Get-MpComputerStatus -ErrorAction Stop | Out-File -Append $BasicLogFolder\WindowsDefender.txt",
-"Get-MpPreference -ErrorAction Stop | Out-File -Append $BasicLogFolder\WindowsDefender.txt"
-
-Get-ItemProperty "HKLM:Software\Microsoft\NET Framework Setup\NDP\v4\Full"
-
-# look for port exhaustion entries in the event logs
-$logName = "SYSTEM", "SYSTEM"
-$Provider = "tcpip", "tcpip"
-$eventID = 4227, 4231
-[hashtable]$eventFilter = @{LogName=$logName; ProviderName=$Provider; ID=$eventID}
-$events = Get-WinEvent -FilterHashtable $eventFilter -EA SilentlyContinue
-
-## bail out if running in MS prod domain
-if(!($Mode -iMatch "traceMS")){
-	if (($env:USERDNSDOMAIN -match "\.microsoft\.com") -and (IsTraceOrDataCollection)){
-		Write-Host " .. running on Domain: $env:USERDNSDOMAIN"
-		Write-Host -ForegroundColor Magenta "`n ..exiting, as testing TSS in microsoft.com domain may cause Security alerts. Please test TSS in Lab environment without CorpNet access and read 'Important Note' in internal KB5026874. `nIn case you need data from this MS domain joined machine, plz append: -Mode traceMS"
-		Exit
-	}
-}
-
-
-P0 ### Bootmode Add-Type -AssemblyName System.Windows.Forms; New-Object System.Windows.Forms.BootMode
-P0 ### Re-enable and finish Findings accordion
-P0 ### Review and complete all description/mitigation text
-P0 ### Finish WCF profiling finding
-P0 ### $uuid = Get-CimInstance -Query 'SELECT UUID FROM Win32_ComputerSystemProduct' | Select-Object -ExpandProperty UUID
-P0 ### Check for system crashes (bugchecks), surface most recent one as well as crash count last 24 hour
-P0 ### Disk space check should also check drive with page file if different than system drive
-P0 ### Last known heartbeat
-P0 ### Use checkaws to verify external IP, which then confirms internet access as well
-P0 ### Available memory
-P0 ### Page file settings
-    get-ciminstance -class Win32_PageFile | select *
-    get-item c:\pagefile.sys -force
-P0 ### filter drivers
-P0 ### Mellanox driver version check (alread shows up on 3rd-party running drivers tab)
-P0 ### installed extensions and their statuses (if possible to get this cleanly from inside the guest without calling CRP)
-P0 ### Need to also check for ProxySettingsPerUser https://admx.help/?Category=Windows_10_2016&Policy=Microsoft.Policies.InternetExplorer::UserProxy
-        Computer Configuration\Administrative Templates\Windows Components\Internet Explorer\Make proxy settings per-machine (rather than per user)
-P0 ### (implemented, just needs content written) permissions on C:\WindowsAzure and c:\Packages folder during startup. It first removes all user/groups and then sets the following permission (Read & Execute: Everyone, Full Control: SYSTEM & Local Administrators only) to these folders. If GA fails to remove/set the permission, it can't proceed further.
-        WaAppAgent.log shows this: [00000006] {ALPHANUMERICPII} [FATAL] Failed to set access rules for agent directories. Exception: System.Security.Principal.IdentityNotMappedException: {Namepii} or all identity references could not be translated. Symptom reported: Guest agent not ready (Unresponsive status).
-P0 ### Update github repo readme with additional ways to run VMAssist.ps1 (mostly done)
-
-P1 ### Add test cases for each check
-P1 ### if possible, replace Get-NetIPConfiguration with cmdlets that don't rely on WMI
-P1 ### -verboseonly should always log to log file
-P1 ### Include script log contents at bottom of HTML report in code block so the single report .htm file will always include the log file
-P1 ### Clean up 'VM agent installed' check (mostly done?)
-P1 ### Commit
-P1 ### Check for out-dated netvsc.sys
-        Get-CimInstance -Query "'SELECT Name,Status,ExitCode,Started,StartMode,ErrorControl,PathName FROM Win32_SystemDriver WHERE Name='netvsc'"
-        get-itemproperty hklm:\system\currentcontrolset\services\netvsc | Select-Object -ExpandProperty ImagePath
-        \SystemRoot\System32\drivers\netvsc63.sys - ws12r2
-        \SystemRoot\System32\drivers\netvsc.sys - win11,ws22
-        get-itemproperty hklm:\system\currentcontrolset\services\netvsc | Select-Object -ExpandProperty ImagePath
-P1 ### Windows activation status, relevant reg settings, most recent software licensing service events
-P1 ### Add relevant checks from Set-Wallpaper.ps1
-P1 ### Add mitigations for existing checks (XL)
 #>
 
 $global:dbgOutput = $output
