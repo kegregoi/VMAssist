@@ -332,7 +332,7 @@ function Get-ApplicationErrors
         $id = $latestApplicationError.Id
         $message = $latestApplicationError.Message
         $description = "$applicationErrorsCount $name process errors in the last 1 day. Most recent: $timeCreated $id $message"
-        New-Finding -type 'Critical' -name "$name application error" -description $description -mitigation ''
+        New-Finding -type 'Critical' -name "$name application error" -description $description -mitigation 'If this application failure was unexpected or is happening repeatedly then further investigation into the Application Event log details and/or C:\WindowsAzure\WaAppAgent.log may be needed to investigate what caused it to fail'
         New-Check -name "$name process errors" -result 'FAILED' -details ''
         Out-Log $false -color Red -endLine
     }
@@ -358,7 +358,7 @@ function Get-ServiceCrashes
         $id = $latestCrash.Id
         $message = $latestCrash.Message
         $description = "$serviceCrashesCount $name service crashes in the last 1 day. Most recent: $timeCreated $id $message"
-        New-Finding -type 'Critical' -name "$name service terminated unexpectedly" -description $description -mitigation ''
+        New-Finding -type 'Critical' -name "$name service terminated unexpectedly" -description $description -mitigation 'If this service crash was unexpected or is happening repeatedly then further investigation into the System/Application Event log details and/or C:\WindowsAzure\WaAppAgent.log may be needed to investigate what caused it to fail'
         $details = "$(Get-Age $timeCreated) ago ($timeCreated)"
         New-Check -name "$name service crashes" -result 'FAILED' -details $details
         Out-Log "$true $details" -color Red -endLine
@@ -504,7 +504,7 @@ function Get-ThirdPartyLoadedModules
                     $details = "$($($processThirdPartyModules.ModuleName -join ',').TrimEnd(','))"
                     New-Check -name "Third-party modules in $processName" -result 'Info' -details $details
                     Out-Log $true -endLine -color Cyan
-                    New-Finding -type Information -name "Third-party modules in $processName" -description $details -mitigation ''
+                    New-Finding -type Information -name "Third-party modules in $processName" -description $details -mitigation 'Third-party .dlls have been put in the Guest Agent process. Other applications occasionally do this and it will not necessarily cause the Guest Agent to fail. However, it is possible that these .dlls can cause unexpected failures in the Guest Agent that are difficult to debug. If any of these .dlls are from unexpected applications then consider removing/reconfiguring the application so that it no longer injects its .dlls into the Guest Agent.'
                 }
                 else
                 {
@@ -697,7 +697,7 @@ function Get-ServiceChecks
             if ($isInstalled -eq $false)
             {
                 New-Check -name "$name service" -result 'FAILED' -details "$name service is not installed"
-                New-Finding -type 'Critical' -name "$name service is not installed" -description '' -mitigation ''
+                New-Finding -type 'Critical' -name "$name service is not installed" -description '' -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
                 Out-Log 'Not Installed' -color Red -endLine
             }
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $true -and $isExpectedStartType -eq $true)
@@ -708,19 +708,19 @@ function Get-ServiceChecks
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $true -and $isExpectedStartType -eq $false)
             {
                 New-Check -name "$name service" -result 'FAILED' -details $details
-                New-Finding -type 'Warning' -name "$name service start type $startType (expected: $expectedStartType)" -description '' -mitigation ''
+                New-Finding -type 'Warning' -name "$name service start type $startType (expected: $expectedStartType)" -description $details -mitigation "We recommend setting the 'Startup Type' of the $name service to 'Automatic'. Please open services.msc, double click the $name service, and change the 'Startup Type' to 'Automatic'"
                 Out-Log "Status: $status (expected $expectedStatus) StartType: $startType (expected $expectedStartType)" -color Red -endLine
             }
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $false -and $isExpectedStartType -eq $true)
             {
                 New-Check -name "$name service" -result 'FAILED' -details $details
-                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description '' -mitigation ''
+                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "The $name service is not currently Running. Open services.msc and start the service."
                 Out-Log "Status: $status (expected $expectedStatus) StartType: $startType (expected $expectedStartType)" -color Red -endLine
             }
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $false -and $isExpectedStartType -eq $false)
             {
                 New-Check -name "$name service" -result 'FAILED' -details $details
-                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description '' -mitigation ''
+                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "</br>The $name service is not currently Running. Open services.msc and start the service. </br></br> We also recommend setting the 'Startup Type' of the $name service to 'Automatic'. Please open services.msc, double click the $name service, and change the 'Startup Type' to 'Automatic'"
                 Out-Log "Status: $status (expected $expectedStatus) StartType: $startType (expected $expectedStartType)" -color Red -endLine
             }
 
@@ -735,13 +735,13 @@ function Get-ServiceChecks
                 $details = 'ImagePath registry value is incorrect'
                 New-Check -name "$name service" -result 'FAILED' -details $details
                 $description = "HKLM:\SYSTEM\CurrentControlSet\Services\$name\ImagePath is '$imagePath' but actual location of $imageName is '$actualImagePath'"
-                New-Finding -type 'Critical' -name "$name service ImagePath registry value is incorrect" -description $description -mitigation ''
+                New-Finding -type 'Critical' -name "$name service ImagePath registry value is incorrect" -description $description -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
                 Out-Log 'Not Installed' -color Red -endLine
             }
             else
             {
                 New-Check -name "$name service" -result 'FAILED' -details "$name service is not installed"
-                New-Finding -type 'Critical' -name "$name service is not installed" -description '' -mitigation ''
+                New-Finding -type 'Critical' -name "$name service is not installed" -description '' -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
                 Out-Log 'Not Installed' -color Red -endLine
             }
         }
@@ -749,7 +749,7 @@ function Get-ServiceChecks
     else
     {
         New-Check -name "$name service" -result 'FAILED' -details "$name service is not installed"
-        New-Finding -type 'Critical' -name "$name service is not installed" -description '' -mitigation ''
+        New-Finding -type 'Critical' -name "$name service is not installed" -description '' -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
         Out-Log 'Not Installed' -color Red -endLine
     }
 }
@@ -1990,7 +1990,7 @@ if ($isAzureVM)
         $details = "VM agent is not installed ($detailsSuffix)"
         New-Check -name 'VM agent installed' -result 'FAILED' -details $details
         Out-Log $isVMAgentInstalled -color Red -endLine
-        New-Finding -type Critical -Name 'VM agent not installed' -description $details -mitigation ''
+        New-Finding -type Critical -Name 'VM agent not installed' -description $details -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
     }
 
     if ($isVMAgentInstalled)
@@ -2289,13 +2289,13 @@ if ($isVMAgentInstalled)
             $tenantEncryptionCertWithinValidityPeriod = $false
             Out-Log $tenantEncryptionCertWithinValidityPeriod -color Red -endLine
             New-Check -name 'TenantEncryptionCert within validity period' -result 'FAILED' -details "Now: $now Effective: $effective Expires: $expires"
-            New-Finding -type Critical -name 'TenantEncryptionCert not within validity period' -description "Now: $now Effective: $effective Expires: $expires" -mitigation $mitigation
+            New-Finding -type Critical -name 'TenantEncryptionCert not within validity period' -description "Now: $now Effective: $effective Expires: $expires" -mitigation '<a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/troubleshoot-extension-certificates-issues-windows-vm#solution-1-update-the-extension-certificate">Update the extension certificate</a>'
         }
     }
     else
     {
         New-Check -name 'TenantEncryptionCert installed' -result 'FAILED' -details ''
-        New-Finding -type Critical -name 'TenantEncryptionCert not installed' -description '' -mitigation ''
+        New-Finding -type Critical -name 'TenantEncryptionCert not installed' -description '' -mitigation '<a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/troubleshoot-extension-certificates-issues-windows-vm#troubleshooting-checklist">Troubleshoot the extension certificate</a>'
         Out-Log $false -color Red -endLine
     }
 }
@@ -2610,8 +2610,7 @@ if ($isVMAgentInstalled)
         Out-Log $windowsAzureHasDefaultPermissions -color Cyan -endLine
         $details = "$windowsAzureFolderPath does not have default NTFS permissions<br>SDDL: $windowsAzureSddl<br>$windowsAzureAccessString"
         New-Check -name "$windowsAzureFolderPath permissions" -result 'Info' -details $details
-        $mitigation = '<a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-extension-certificates-issues-windows-vm#solution-2-fix-the-access-control-list-acl-in-the-machinekeys-or-systemkeys-folders">Troubleshoot extension certificates</a>'
-        New-Finding -type Information -name "Non-default $windowsAzureFolderPath permissions" -description $details -mitigation $mitigation
+        New-Finding -type Information -name "Non-default $windowsAzureFolderPath permissions" -description $details -mitigation 'The C:\WindowsAzure directory has been changed from its default permissions. Ensure the built-in System account has Full control to this folder, subfolder, and directories in order for the Guest Agent to work properly.'
     }
 }
 else
@@ -2625,7 +2624,7 @@ $packagesFolderPath = "$env:SystemDrive\Packages"
 Out-Log "$packagesFolderPath folder has default permissions:" -startLine
 if ($isVMAgentInstalled)
 {
-    $packagesDefaultSddl = 'O:BAG:SYD:P(A;OICI;0x1200a9;;;WD)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+    $packagesDefaultSddl = 'O:BAG:SYD:PAI(A;OICI;0x1200a9;;;WD)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
     $packagesAcl = Get-Acl -Path $packagesFolderPath
     $packagesSddl = $packagesAcl | Select-Object -ExpandProperty Sddl
     $packagesAccess = $packagesAcl | Select-Object -ExpandProperty Access
@@ -2644,8 +2643,7 @@ if ($isVMAgentInstalled)
         Out-Log $packagesHasDefaultPermissions -color Cyan -endLine
         $details = "$packagesFolderPath does not have default NTFS permissions<br>SDDL: $packagesSddl<br>$packagesAccessString"
         New-Check -name "$packagesFolderPath permissions" -result 'Info' -details $details
-        $mitigation = '<a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-extension-certificates-issues-windows-vm#solution-2-fix-the-access-control-list-acl-in-the-machinekeys-or-systemkeys-folders">Troubleshoot extension certificates</a>'
-        New-Finding -type Information -name "Non-default $packagesFolderPath permissions" -description $details #-mitigation $mitigation
+        New-Finding -type Information -name "Non-default $packagesFolderPath permissions" -description $details -mitigation 'The C:\Packages directory has been changed from its default permissions. Ensure the built-in System account has Full control to this folder, subfolder, and directories in order for the Guest Agent to work properly.'
     }
 }
 else
@@ -2671,14 +2669,14 @@ if ($systemDriveFreeSpaceBytes)
         $details = "<100MB free ($($systemDriveFreeSpaceMB)MB free) on drive $systemDriveLetter"
         Out-Log $false -color Red -endLine
         New-Check -name 'Disk space check (<1GB Warn, <100MB Critical)' -result 'FAILED' -details $details
-        New-Finding -type Critical -name 'System drive low disk space' -description $details -mitigation ''
+        New-Finding -type Critical -name 'System drive low disk space' -description $details -mitigation 'You have <100MB of disk space remaining on your system drive. If you run out of disk space there can be unexpected failures if the OS or applications are no longer able to write to files. Please either free up space or <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-disks">expand the drive</a>'
     }
     elseif ($systemDriveFreeSpaceGB -lt 1)
     {
         $details = "<1GB free ($($systemDriveFreeSpaceGB)GB free) on drive $systemDriveLetter"
         Out-Log $details -color Yellow -endLine
         New-Check -name 'Disk space check (<1GB Warn, <100MB Critical)' -result 'Warning' -details $details
-        New-Finding -type Warning -name 'System drive low free space' -description $details -mitigation ''
+        New-Finding -type Warning -name 'System drive low free space' -description $details -mitigation 'You have <1GB of disk space remaining on your system drive. If you run out of disk space there can be unexpected failures if the OS or applications are no longer able to write to files. Please consider either freeing up space or <a href="https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-disks">expand the drive</a>'
     }
     else
     {
@@ -2936,7 +2934,7 @@ if ($dhcpDisabledNics)
         $dhcpDisabledNicsString += "Description: $($dhcpDisabledNic.Description) Alias: $($dhcpDisabledNic.Alias) Index: $($dhcpDisabledNic.Index) IpAddress: $($dhcpDisabledNic.IpAddress)"
     }
     New-Check -name 'DHCP-assigned IP addresses' -result 'Info' -details $dhcpDisabledNicsString
-    New-Finding -type Information -name 'DHCP-disabled NICs' -description $dhcpDisabledNicsString -mitigation ''
+    New-Finding -type Information -name 'DHCP-disabled NICs' -description $dhcpDisabledNicsString -mitigation '</br>If your NIC only has 1 IP address then we highly recommend that the NIC does not use static IP address assignment. Instead <a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/windows-azure-guest-agent">use DHCP</a> to dynamically get the IP address that you have set on the VMs NIC in Azure. </br></br>If your NIC has multiple IP addresses then ensure you are following the <a href="https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/virtual-network-multiple-ip-addresses-portal">steps to static assign the IPs correctly</a>'
 }
 else
 {
