@@ -22,7 +22,7 @@ param (
     [string]$outputPath = 'C:\logs',
     [switch]$fakeFinding,
     [switch]$skipFirewall,
-    [switch]$skipFilters = $true,
+    [switch]$skipFilters,
     [switch]$useDotnetForNicDetails = $true,
     [switch]$showLog,
     [switch]$showReport,
@@ -2317,7 +2317,7 @@ if ($isAzureVM)
     Out-Log 'Wireserver endpoint 168.63.129.16:80 reachable:' -startLine
     $wireserverPort80Reachable = Test-Port -ipAddress '168.63.129.16' -port 80 -timeout 1000
     $description = "Wireserver endpoint 168.63.129.16:80 reachable: $($wireserverPort80Reachable.Succeeded) $($wireserverPort80Reachable.Error)"
-    $mitigation = '<a href="https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16">What is IP address 168.63.129.16?</a>'
+    $mitigation = '<a href="https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16">Ensure that there is network connectivity to 168.63.129.16 on ports 80 and 32526.</a>'
     if ($wireserverPort80Reachable.Succeeded)
     {
         New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'OK' -details ''
@@ -2690,7 +2690,7 @@ else
     $details = "Unable to determine free space on system drive $systemDriveLetter"
     Out-Log $details -color Cyan -endLine
     New-Check -name 'Disk space check (<1GB Warn, <100MB Critical)' -result 'Info' -details $details
-    New-Finding -type Warning -name 'System drive low free space' -description $details -mitigation ''
+    New-Finding -type Warning -name 'System drive low free space' -description $details -mitigation 'We were unable to determine how much free space is on your system drive. Please ensure that the system drive has available free space.'
 }
 
 $joinInfo = Get-JoinInfo
@@ -3528,6 +3528,8 @@ $vmAgentTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 
 [void]$stringBuilder.Append('<div id="Extensions" class="tabcontent">')
 
+if ($isVMAgentInstalled)
+{
 $windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
 $windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
 $aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
@@ -3557,6 +3559,7 @@ foreach ($handlerKeyName in $handlerKeyNames)
     $extension.message = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.formattedMessage.message
     $vmHandlerValuesTable = $extension | ConvertTo-Html -Fragment -As Table
     $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
+}
 }
 [void]$stringBuilder.Append('</div>')
 
