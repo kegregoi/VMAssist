@@ -22,7 +22,7 @@ param (
     [string]$outputPath = 'C:\logs',
     [switch]$fakeFinding,
     [switch]$skipFirewall,
-    [switch]$skipFilters,
+    [switch]$skipFilters = $true,
     [switch]$useDotnetForNicDetails = $true,
     [switch]$showLog,
     [switch]$showReport,
@@ -2624,7 +2624,7 @@ $packagesFolderPath = "$env:SystemDrive\Packages"
 Out-Log "$packagesFolderPath folder has default permissions:" -startLine
 if ($isVMAgentInstalled)
 {
-    $packagesDefaultSddl = 'O:BAG:SYD:PAI(A;OICI;0x1200a9;;;WD)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+    $packagesDefaultSddl = 'O:BAG:SYD:P(A;OICI;0x1200a9;;;WD)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
     $packagesAcl = Get-Acl -Path $packagesFolderPath
     $packagesSddl = $packagesAcl | Select-Object -ExpandProperty Sddl
     $packagesAccess = $packagesAcl | Select-Object -ExpandProperty Access
