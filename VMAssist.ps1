@@ -2477,7 +2477,7 @@ if ($isAzureVM)
     }
     #>
 
-    if ($wireserverPort80Reachable.Succeeded -and $wireserverPort32526Reachable.Succeeded)
+    if ($wireserverPort80Reachable.Succeeded -and $wireserverPort32526Reachable.Succeeded -and $isVMAgentInstalled)
     {
         Out-Log 'Getting status from aggregatestatus.json' -verboseOnly
         $aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
