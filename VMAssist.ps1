@@ -2005,7 +2005,7 @@ if ($isAzureVM)
 
         if ($agentUninstallKey)
         {
-            New-Check -name 'VM agent installed by provisioning agent' -result 'OK' -details ''
+            New-Check -name 'VM agent installed by MSI' -result 'OK' -details ''
             Out-Log 'MSI: MSI' -color Green -endLine
         }
         else
