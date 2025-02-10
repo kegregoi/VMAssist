@@ -2357,7 +2357,7 @@ if ($isAzureVM)
     {
         New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'FAILED' -details ''
         Out-Log "$($imdsReachable.Succeeded) $($imdsReachable.Error)" -color Red -endLine
-        New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description
+        New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation "Ensure that there is network connectivity to 169.254.169.254 on ports 80"
     }
 
     if ($imdsReachable.Succeeded)
