@@ -1746,16 +1746,6 @@ Out-Log $osVersion -color Cyan
 $timeZone = [System.TimeZoneInfo]::Local | Select-Object -ExpandProperty DisplayName
 $isHyperVGuest = Confirm-HyperVGuest
 Out-Log "Hyper-V Guest: $isHyperVGuest"
-if ($isHyperVGuest)
-{
-    $isAzureVM = Confirm-AzureVM
-    Out-Log "Azure VM: $isAzureVM"
-}
-else
-{
-    $isAzureVM = $false
-    Out-Log "Azure VM: $isAzureVM"
-}
 
 $parentProcessId = Get-CimInstance -Class Win32_Process -Filter "ProcessId = '$PID'" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ParentProcessId
 $grandparentProcessPid = Get-CimInstance -Class Win32_Process -Filter "ProcessId = '$parentProcessId'" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ParentProcessId
@@ -1776,73 +1766,55 @@ if ($lastConfig)
 {
     $uuidFromRegistry = $lastConfig.ToLower().Replace('{', '').Replace('}', '')
 }
-if ($isAzureVM)
-{
-    $vmId = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Azure' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty VmId
-}
+
+$vmId = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Azure' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty VmId
 
 $windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
-if ($isAzureVM)
-{
-    Out-Log "$windowsAzureFolderPath folder exists:" -startLine
-    if (Test-Path -Path $windowsAzureFolderPath -PathType Container)
-    {
-        $windowsAzureFolderExists = $true
-        Out-Log $windowsAzureFolderExists -color Green -endLine
-        New-Check -name "$windowsAzureFolderPath folder exists" -result 'OK' -details ''
-        $windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
-        Out-Log 'WindowsAzureGuestAgent.exe exists:' -startLine
-        $windowsAzureGuestAgentExe = $windowsAzureFolder | Where-Object {$_.Name -eq 'WindowsAzureGuestAgent.exe'}
-        if ($windowsAzureGuestAgentExe)
-        {
-            New-Check -name "WindowsAzureGuestAgent.exe exists in $windowsAzureFolderPath" -result 'OK' -details ''
-            $windowsAzureGuestAgentExeExists = $true
-            $windowsAzureGuestAgentExeFileVersion = $windowsAzureGuestAgentExe | Select-Object -ExpandProperty VersionInfo | Select-Object -ExpandProperty FileVersion
-            Out-Log "$windowsAzureGuestAgentExeExists (version $windowsAzureGuestAgentExeFileVersion)" -color Green -endLine
-        }
-        else
-        {
-            New-Check -name "WindowsAzureGuestAgent.exe exists in $windowsAzureFolderPath" -result 'FAILED' -details ''
-            $windowsAzureGuestAgentExe = $false
-            Out-Log $windowsAzureGuestAgentExeExists -color Red -endLine
-        }
 
-        Out-Log 'WaAppAgent.exe exists:' -startLine
-        $waAppAgentExe = $windowsAzureFolder | Where-Object {$_.Name -eq 'WaAppAgent.exe'}
-        if ($waAppAgentExe)
-        {
-            New-Check -name "WaAppAgent.exe exists in $windowsAzureFolderPath" -result 'OK' -details ''
-            $waAppAgentExeExists = $true
-            $waAppAgentExeFileVersion = $waAppAgentExe | Select-Object -ExpandProperty VersionInfo | Select-Object -ExpandProperty FileVersion
-            Out-Log "$waAppAgentExeExists (version $waAppAgentExeFileVersion)" -color Green -endLine
-        }
-        else
-        {
-            New-Check -name "WaAppAgent.exe exists in $windowsAzureFolderPath" -result 'FAILED' -details ''
-            $waAppAgentExeExists = $false
-            Out-Log $waAppAgentExeExists -color Red -endLine
-        }
+Out-Log "$windowsAzureFolderPath folder exists:" -startLine
+if (Test-Path -Path $windowsAzureFolderPath -PathType Container)
+{
+    $windowsAzureFolderExists = $true
+    Out-Log $windowsAzureFolderExists -color Green -endLine
+    New-Check -name "$windowsAzureFolderPath folder exists" -result 'OK' -details ''
+    $windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
+    Out-Log 'WindowsAzureGuestAgent.exe exists:' -startLine
+    $windowsAzureGuestAgentExe = $windowsAzureFolder | Where-Object {$_.Name -eq 'WindowsAzureGuestAgent.exe'}
+    if ($windowsAzureGuestAgentExe)
+    {
+        New-Check -name "WindowsAzureGuestAgent.exe exists in $windowsAzureFolderPath" -result 'OK' -details ''
+        $windowsAzureGuestAgentExeExists = $true
+        $windowsAzureGuestAgentExeFileVersion = $windowsAzureGuestAgentExe | Select-Object -ExpandProperty VersionInfo | Select-Object -ExpandProperty FileVersion
+        Out-Log "$windowsAzureGuestAgentExeExists (version $windowsAzureGuestAgentExeFileVersion)" -color Green -endLine
     }
     else
     {
-        $windowsAzureFolderExists = $false
-        New-Check -name "$windowsAzureFolderPath folder exists" -result 'FAILED' -details ''
-        Out-Log $windowsAzureFolderExists -color Red -endLine
+        New-Check -name "WindowsAzureGuestAgent.exe exists in $windowsAzureFolderPath" -result 'FAILED' -details ''
+        $windowsAzureGuestAgentExe = $false
+        Out-Log $windowsAzureGuestAgentExeExists -color Red -endLine
+    }
+
+    Out-Log 'WaAppAgent.exe exists:' -startLine
+    $waAppAgentExe = $windowsAzureFolder | Where-Object {$_.Name -eq 'WaAppAgent.exe'}
+    if ($waAppAgentExe)
+    {
+        New-Check -name "WaAppAgent.exe exists in $windowsAzureFolderPath" -result 'OK' -details ''
+        $waAppAgentExeExists = $true
+        $waAppAgentExeFileVersion = $waAppAgentExe | Select-Object -ExpandProperty VersionInfo | Select-Object -ExpandProperty FileVersion
+        Out-Log "$waAppAgentExeExists (version $waAppAgentExeFileVersion)" -color Green -endLine
+    }
+    else
+    {
+        New-Check -name "WaAppAgent.exe exists in $windowsAzureFolderPath" -result 'FAILED' -details ''
+        $waAppAgentExeExists = $false
+        Out-Log $waAppAgentExeExists -color Red -endLine
     }
 }
 else
 {
     $windowsAzureFolderExists = $false
-    Out-Log "$windowsAzureFolderPath folder exists: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name "$windowsAzureFolderPath folder exists" -result 'Skipped' -details "Azure VM: $isAzureVM"
-
-    $windowsAzureGuestAgentExe = $false
-    Out-Log "WindowsAzureGuestAgent.exe exists in $($windowsAzureFolderPath): Skipped (Azure VM: $isAzureVM)"
-    New-Check -name "WindowsAzureGuestAgent.exe exists in $windowsAzureFolderPath" -result 'Skipped' -details "Azure VM: $isAzureVM"
-
-    $waAppAgentExeExists = $false
-    Out-Log "WaAppAgent.exe exists in $($windowsAzureFolderPath): Skipped (Azure VM: $isAzureVM)"
-    New-Check -name "WaAppAgent.exe exists in $windowsAzureFolderPath" -result 'Skipped' -details "Azure VM: $isAzureVM"
+    New-Check -name "$windowsAzureFolderPath folder exists" -result 'FAILED' -details ''
+    Out-Log $windowsAzureFolderExists -color Red -endLine
 }
 
 Add-Type -TypeDefinition @'
@@ -1886,51 +1858,24 @@ namespace Win32.Service
 }
 '@
 
-if ($isAzureVM)
+$rdagent = Get-ServiceChecks -name 'RdAgent' -expectedStatus 'Running' -expectedStartType 'Automatic'
+if ($rdagent)
 {
-    $rdagent = Get-ServiceChecks -name 'RdAgent' -expectedStatus 'Running' -expectedStartType 'Automatic'
-    if ($rdagent)
-    {
-        $rdAgentServiceExists = $true
-    }
-    $windowsAzureGuestAgent = Get-ServiceChecks -name 'WindowsAzureGuestAgent' -expectedStatus 'Running' -expectedStartType 'Automatic'
-    if ($windowsAzureGuestAgent)
-    {
-        $windowsAzureGuestAgentServiceExists = $true
-    }
+    $rdAgentServiceExists = $true
 }
-else
+$windowsAzureGuestAgent = Get-ServiceChecks -name 'WindowsAzureGuestAgent' -expectedStatus 'Running' -expectedStartType 'Automatic'
+if ($windowsAzureGuestAgent)
 {
-    Out-Log "RdAgent service: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'RdAgent service' -result 'Skipped' -details "Azure VM: $isAzureVM"
+    $windowsAzureGuestAgentServiceExists = $true
+}
 
-    Out-Log "WindowsAzureGuestAgent service: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'WindowsAzureGuestAgent service' -result 'Skipped' -details "Azure VM: $isAzureVM"
-}
 $winmgmt = Get-ServiceChecks -name 'Winmgmt' -expectedStatus 'Running' -expectedStartType 'Automatic'
 $keyiso = Get-ServiceChecks -name 'Keyiso' -expectedStatus 'Running' -expectedStartType 'Manual'
 
-if ($isAzureVM)
-{
-    Get-ServiceCrashes -Name 'RdAgent'
-    Get-ServiceCrashes -Name 'Windows Azure Guest Agent'
-    Get-ApplicationErrors -Name 'WaAppagent'
-    Get-ApplicationErrors -Name 'WindowsAzureGuestAgent'
-}
-else
-{
-    Out-Log "RdAgent service crashes: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'RdAgent service crashes' -result 'Skipped' -details "Azure VM: $isAzureVM"
-
-    Out-Log "Windows Azure Guest Agent service crashes: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'Windows Azure Guest Agent service crashes' -result 'Skipped' -details "Azure VM: $isAzureVM"
-
-    Out-Log "WaAppAgent application errors: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'WaAppAgent application errors' -result 'Skipped' -details "Azure VM: $isAzureVM"
-
-    Out-Log "WindowsAzureGuestAgent application errors: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'WindowsAzureGuestAgent application errors' -result 'Skipped' -details "Azure VM: $isAzureVM"
-}
+Get-ServiceCrashes -Name 'RdAgent'
+Get-ServiceCrashes -Name 'Windows Azure Guest Agent'
+Get-ApplicationErrors -Name 'WaAppagent'
+Get-ApplicationErrors -Name 'WindowsAzureGuestAgent'
 
 # TODO: WS25+ no longer include WMIC.exe (<WS25 versions have it in C:\Windows\System32\wbem\WMIC.exe), so need to use a different approach here
 # It can be installed as a feature-on-demand in WS25, but since it'll ultimately even that won't an option, but to address this now
@@ -1971,59 +1916,46 @@ else
     Out-Log $details -endLine
 }
 
-if ($isAzureVM)
+Out-Log 'VM Agent installed:' -startLine
+# $detailsSuffix = "(windowsAzureFolderExists:$windowsAzureFolderExists rdAgentServiceExists:$rdAgentServiceExists windowsAzureGuestAgentServiceExists:$windowsAzureGuestAgentServiceExists rdAgentKeyExists:$rdAgentKeyExists windowsAzureGuestAgentKeyExists:$windowsAzureGuestAgentKeyExists waAppAgentExeExists:$waAppAgentExeExists windowsAzureGuestAgentExeExists:$windowsAzureGuestAgentExeExists)"
+# if ($windowsAzureFolderExists -and $rdAgentServiceExists -and $windowsAzureGuestAgentServiceExists -and $rdAgentKeyExists -and $windowsAzureGuestAgentKeyExists -and $waAppAgentExeExists -and $windowsAzureGuestAgentExeExists -and $windowsAzureGuestAgentKeyExists -and $windowsAzureGuestAgentKeyExists)
+$detailsSuffix = "$windowsAzureFolderPath exists: $([bool]$windowsAzureFolder), WaAppAgent.exe in $($windowsAzureFolderPath): $([bool]$waAppAgentExe), WindowsAzureGuestAgent.exe in $($windowsAzureFolderPath): $([bool]$windowsAzureGuestAgentExe), RdAgent service installed: $([bool]$rdagent), WindowsAzureGuestAgent service installed: $([bool]$windowsAzureGuestAgent)"
+if ([bool]$windowsAzureFolder -and [bool]$rdagent -and [bool]$windowsAzureGuestAgent -and [bool]$waAppAgentExe -and [bool]$windowsAzureGuestAgentExe)
 {
-    Out-Log 'VM Agent installed:' -startLine
-    # $detailsSuffix = "(windowsAzureFolderExists:$windowsAzureFolderExists rdAgentServiceExists:$rdAgentServiceExists windowsAzureGuestAgentServiceExists:$windowsAzureGuestAgentServiceExists rdAgentKeyExists:$rdAgentKeyExists windowsAzureGuestAgentKeyExists:$windowsAzureGuestAgentKeyExists waAppAgentExeExists:$waAppAgentExeExists windowsAzureGuestAgentExeExists:$windowsAzureGuestAgentExeExists)"
-    # if ($windowsAzureFolderExists -and $rdAgentServiceExists -and $windowsAzureGuestAgentServiceExists -and $rdAgentKeyExists -and $windowsAzureGuestAgentKeyExists -and $waAppAgentExeExists -and $windowsAzureGuestAgentExeExists -and $windowsAzureGuestAgentKeyExists -and $windowsAzureGuestAgentKeyExists)
-    $detailsSuffix = "$windowsAzureFolderPath exists: $([bool]$windowsAzureFolder), WaAppAgent.exe in $($windowsAzureFolderPath): $([bool]$waAppAgentExe), WindowsAzureGuestAgent.exe in $($windowsAzureFolderPath): $([bool]$windowsAzureGuestAgentExe), RdAgent service installed: $([bool]$rdagent), WindowsAzureGuestAgent service installed: $([bool]$windowsAzureGuestAgent)"
-    if ([bool]$windowsAzureFolder -and [bool]$rdagent -and [bool]$windowsAzureGuestAgent -and [bool]$waAppAgentExe -and [bool]$windowsAzureGuestAgentExe)
-    {
-        $isVMAgentInstalled = $true
-        $details = "VM agent is installed ($detailsSuffix)"
-        New-Check -name 'VM agent installed' -result 'OK' -details $details
-        Out-Log $isVMAgentInstalled -color Green -endLine
-    }
-    else
-    {
-        $isVMAgentInstalled = $false
-        $details = "VM agent is not installed ($detailsSuffix)"
-        New-Check -name 'VM agent installed' -result 'FAILED' -details $details
-        Out-Log $isVMAgentInstalled -color Red -endLine
-        New-Finding -type Critical -Name 'VM agent not installed' -description $details -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
-    }
-
-    if ($isVMAgentInstalled)
-    {
-        Out-Log 'VM agent installed by provisioning agent or Windows Installer package (MSI):' -startLine
-        $uninstallKeyPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
-        $uninstallKey = Invoke-ExpressionWithLogging "Get-Item -Path '$uninstallKeyPath' -ErrorAction SilentlyContinue" -verboseOnly
-        $agentUninstallKey = $uninstallkey.GetSubKeyNames() | ForEach-Object {Get-ItemProperty -Path $uninstallKeyPath\$_ | Where-Object {$_.Publisher -eq 'Microsoft Corporation' -and $_.DisplayName -match 'Windows Azure VM Agent'}}
-        $agentUninstallKeyDisplayName = $agentUninstallKey.DisplayName
-        $agentUninstallKeyDisplayVersion = $agentUninstallKey.DisplayVersion
-        $agentUninstallKeyInstallDate = $agentUninstallKey.InstallDate
-
-        if ($agentUninstallKey)
-        {
-            New-Check -name 'VM agent installed by MSI' -result 'OK' -details ''
-            Out-Log 'MSI: MSI' -color Green -endLine
-        }
-        else
-        {
-            New-Check -name 'VM agent installed by provisioning agent' -result 'OK' -details ''
-            Out-Log 'Provisioning agent' -color Green -endLine
-        }
-    }
+    $isVMAgentInstalled = $true
+    $details = "VM agent is installed ($detailsSuffix)"
+    New-Check -name 'VM agent installed' -result 'OK' -details $details
+    Out-Log $isVMAgentInstalled -color Green -endLine
 }
 else
 {
     $isVMAgentInstalled = $false
+    $details = "VM agent is not installed ($detailsSuffix)"
+    New-Check -name 'VM agent installed' -result 'FAILED' -details $details
+    Out-Log $isVMAgentInstalled -color Red -endLine
+    New-Finding -type Critical -Name 'VM agent not installed' -description $details -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
+}
 
-    Out-Log "VM agent installed: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'VM agent installed' -result 'Skipped' -details "Azure VM: $isAzureVM"
+if ($isVMAgentInstalled)
+{
+    Out-Log 'VM agent installed by provisioning agent or Windows Installer package (MSI):' -startLine
+    $uninstallKeyPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    $uninstallKey = Invoke-ExpressionWithLogging "Get-Item -Path '$uninstallKeyPath' -ErrorAction SilentlyContinue" -verboseOnly
+    $agentUninstallKey = $uninstallkey.GetSubKeyNames() | ForEach-Object {Get-ItemProperty -Path $uninstallKeyPath\$_ | Where-Object {$_.Publisher -eq 'Microsoft Corporation' -and $_.DisplayName -match 'Windows Azure VM Agent'}}
+    $agentUninstallKeyDisplayName = $agentUninstallKey.DisplayName
+    $agentUninstallKeyDisplayVersion = $agentUninstallKey.DisplayVersion
+    $agentUninstallKeyInstallDate = $agentUninstallKey.InstallDate
 
-    Out-Log "VM agent installed by provisioning agent or Windows Installer package (MSI): Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'VM agent installed by provisioning agent' -result 'Skipped' -details "Azure VM: $isAzureVM"
+    if ($agentUninstallKey)
+    {
+        New-Check -name 'VM agent installed by MSI' -result 'OK' -details ''
+        Out-Log 'MSI: MSI' -color Green -endLine
+    }
+    else
+    {
+        New-Check -name 'VM agent installed by provisioning agent' -result 'OK' -details ''
+        Out-Log 'Provisioning agent' -color Green -endLine
+    }
 }
 
 Out-Log 'VM agent is supported version:' -startLine
@@ -2308,245 +2240,222 @@ else
 
 Get-WCFConfig
 
-if ($isAzureVM)
+# wireserver doesn't listen on 8080 even though it creates a BFE filter for it
+# Test-NetConnection -ComputerName 168.63.129.16 -Port 80 -InformationLevel Quiet -WarningAction SilentlyContinue
+# Test-NetConnection -ComputerName 168.63.129.16 -Port 32526 -InformationLevel Quiet -WarningAction SilentlyContinue
+# Test-NetConnection -ComputerName 169.254.169.254 -Port 80 -InformationLevel Quiet -WarningAction SilentlyContinue
+Out-Log 'Wireserver endpoint 168.63.129.16:80 reachable:' -startLine
+$wireserverPort80Reachable = Test-Port -ipAddress '168.63.129.16' -port 80 -timeout 1000
+$description = "Wireserver endpoint 168.63.129.16:80 reachable: $($wireserverPort80Reachable.Succeeded) $($wireserverPort80Reachable.Error)"
+$mitigation = '<a href="https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16">Ensure that there is network connectivity to 168.63.129.16 on ports 80 and 32526.</a>'
+if ($wireserverPort80Reachable.Succeeded)
 {
-    # wireserver doesn't listen on 8080 even though it creates a BFE filter for it
-    # Test-NetConnection -ComputerName 168.63.129.16 -Port 80 -InformationLevel Quiet -WarningAction SilentlyContinue
-    # Test-NetConnection -ComputerName 168.63.129.16 -Port 32526 -InformationLevel Quiet -WarningAction SilentlyContinue
-    # Test-NetConnection -ComputerName 169.254.169.254 -Port 80 -InformationLevel Quiet -WarningAction SilentlyContinue
-    Out-Log 'Wireserver endpoint 168.63.129.16:80 reachable:' -startLine
-    $wireserverPort80Reachable = Test-Port -ipAddress '168.63.129.16' -port 80 -timeout 1000
-    $description = "Wireserver endpoint 168.63.129.16:80 reachable: $($wireserverPort80Reachable.Succeeded) $($wireserverPort80Reachable.Error)"
-    $mitigation = '<a href="https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16">Ensure that there is network connectivity to 168.63.129.16 on ports 80 and 32526.</a>'
-    if ($wireserverPort80Reachable.Succeeded)
-    {
-        New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'OK' -details ''
-        Out-Log "$($wireserverPort80Reachable.Succeeded) $($wireserverPort80Reachable.Error)" -color Green -endLine
-    }
-    else
-    {
-        New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'FAILED' -details ''
-        Out-Log $wireserverPort80Reachable.Succeeded -color Red -endLine
-        New-Finding -type Critical -name 'Wireserver endpoint 168.63.129.16:80 not reachable' -description $description -mitigation $mitigation
-    }
-
-    Out-Log 'Wireserver endpoint 168.63.129.16:32526 reachable:' -startLine
-    $wireserverPort32526Reachable = Test-Port -ipAddress '168.63.129.16' -port 32526 -timeout 1000
-    $description = "Wireserver endpoint 168.63.129.16:32526 reachable: $($wireserverPort32526Reachable.Succeeded) $($wireserverPort80Reachable.Error)"
-    if ($wireserverPort32526Reachable.Succeeded)
-    {
-        New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'OK' -details ''
-        Out-Log $wireserverPort32526Reachable.Succeeded -color Green -endLine
-    }
-    else
-    {
-        New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'FAILED' -details ''
-        Out-Log "$($wireserverPort32526Reachable.Succeeded) $($wireserverPort80Reachable.Error)" -color Red -endLine
-        New-Finding -type Critical -name 'Wireserver endpoint 168.63.129.16:32526 not reachable' -description $description -mitigation $mitigation
-    }
-
-    Out-Log 'IMDS endpoint 169.254.169.254:80 reachable:' -startLine
-    $imdsReachable = Test-Port -ipAddress '169.254.169.254' -port 80 -timeout 1000
-    $description = "IMDS endpoint 169.254.169.254:80 reachable: $($imdsReachable.Succeeded) $($imdsReachable.Error)"
-    if ($imdsReachable.Succeeded)
-    {
-        New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'OK' -details ''
-        Out-Log $imdsReachable.Succeeded -color Green -endLine
-    }
-    else
-    {
-        New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'FAILED' -details ''
-        Out-Log "$($imdsReachable.Succeeded) $($imdsReachable.Error)" -color Red -endLine
-        New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation "Ensure that there is network connectivity to 169.254.169.254 on port 80"
-    }
-
-    if ($imdsReachable.Succeeded)
-    {
-        Out-Log 'IMDS endpoint 169.254.169.254:80 returned expected result:' -startLine
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
-        # Below three lines have it use a null proxy, bypassing any configured proxy
-        # See also https://github.com/microsoft/azureimds/blob/master/IMDSSample.ps1
-        $proxy = New-Object System.Net.WebProxy
-        $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-        $webSession.Proxy = $proxy
-        $apiVersions = Invoke-RestMethod -Headers @{'Metadata' = 'true'} -Method GET -Uri 'http://169.254.169.254/metadata/versions' -WebSession $webSession | Select-Object -ExpandProperty apiVersions
-        $apiVersion = $apiVersions | Select-Object -Last 1
-        $metadata = Invoke-RestMethod -Headers @{'Metadata' = 'true'} -Method GET -Uri "http://169.254.169.254/metadata/instance?api-version=$apiVersion" -WebSession $webSession
-        $compute = $metadata | Select-Object -ExpandProperty compute -ErrorAction SilentlyContinue
-
-        if ($compute)
-        {
-            $imdReturnedExpectedResult = $true
-            Out-Log $imdReturnedExpectedResult -color Green -endLine
-            New-Check -name 'IMDS endpoint 169.254.169.254:80 returned expected result' -result 'OK' -details ''
-
-            $global:dbgMetadata = $metadata
-
-            $azEnvironment = $metadata.compute.azEnvironment
-            $vmName = $metadata.compute.name
-            $vmId = $metadata.compute.vmId
-            $resourceId = $metadata.compute.resourceId
-            $licenseType = $metadata.compute.licenseType
-            $planPublisher = $metadata.compute.plan.publisher
-            $planProduct = $metadata.compute.plan.product
-            $planName = $metadata.compute.plan.name
-            $osDiskDiskSizeGB = $metadata.compute.storageProfile.osDisk.diskSizeGB
-            $osDiskManagedDiskId = $metadata.compute.storageProfile.osDisk.managedDisk.id
-            $osDiskManagedDiskStorageAccountType = $metadata.compute.storageProfile.osDisk.managedDisk.storageAccountType
-            $osDiskCreateOption = $metadata.compute.storageProfile.osDisk.createOption
-            $osDiskCaching = $metadata.compute.storageProfile.osDisk.caching
-            $osDiskDiffDiskSettingsOption = $metadata.compute.storageProfile.osDisk.diffDiskSettings.option
-            $osDiskEncryptionSettingsEnabled = $metadata.compute.storageProfile.osDisk.encryptionSettings.enabled
-            $osDiskImageUri = $metadata.compute.storageProfile.osDisk.image.uri
-            $osDiskName = $metadata.compute.storageProfile.osDisk.name
-            $osDiskOsType = $metadata.compute.storageProfile.osDisk.osType
-            $osDiskVhdUri = $metadata.compute.storageProfile.osDisk.vhd.uri
-            $osDiskWriteAcceleratorEnabled = $metadata.compute.storageProfile.osDisk.writeAcceleratorEnabled
-            $encryptionAtHost = $metadata.compute.securityProfile.encryptionAtHost
-            $secureBootEnabled = $metadata.compute.securityProfile.secureBootEnabled
-            $securityType = $metadata.compute.securityProfile.securityType
-            $virtualTpmEnabled = $metadata.compute.securityProfile.virtualTpmEnabled
-            $virtualMachineScaleSetId = $metadata.compute.virtualMachineScaleSet.id
-            $vmScaleSetName = $metadata.compute.vmScaleSetName
-            $zone = $metadata.compute.zone
-            $dataDisks = $metadata.compute.storageProfile.dataDisks
-            $priority = $metadata.compute.priority
-            $platformFaultDomain = $metadata.compute.platformFaultDomain
-            $platformSubFaultDomain = $metadata.compute.platformSubFaultDomain
-            $platformUpdateDomain = $metadata.compute.platformUpdateDomain
-            $placementGroupId = $metadata.compute.placementGroupId
-            $extendedLocationName = $metadata.compute.extendedLocationName
-            $extendedLocationType = $metadata.compute.extendedLocationType
-            $evictionPolicy = $metadata.compute.evictionPolicy
-            $hostId = $metadata.compute.hostId
-            $hostGroupId = $metadata.compute.hostGroupId
-            $isHostCompatibilityLayerVm = $metadata.compute.isHostCompatibilityLayerVm
-            $hibernationEnabled = $metadata.compute.additionalCapabilities.hibernationEnabled
-            $subscriptionId = $metadata.compute.subscriptionId
-            $resourceGroupName = $metadata.compute.resourceGroupName
-            $location = $metadata.compute.location
-            $vmSize = $metadata.compute.vmSize
-            $vmIdFromImds = $metadata.compute.vmId
-            $publisher = $metadata.compute.publisher
-            $offer = $metadata.compute.offer
-            $sku = $metadata.compute.sku
-            $version = $metadata.compute.version
-            $imageReferenceId = $metadata.compute.storageProfile.imageReference.id
-            if ($publisher)
-            {
-                $imageReference = "$publisher|$offer|$sku|$version"
-            }
-            else
-            {
-                if ($imageReferenceId)
-                {
-                    $imageReference = "$($imageReferenceId.Split('/')[-1]) (custom image)"
-                }
-            }
-            $interfaces = $metadata.network.interface
-            $macAddress = $metadata.network.interface.macAddress
-            $privateIpAddress = $metadata.network.interface | Select-Object -First 1 | Select-Object -ExpandProperty ipv4 -First 1 | Select-Object -ExpandProperty ipAddress -First 1 | Select-Object -ExpandProperty privateIpAddress -First 1
-            $publicIpAddress = $metadata.network.interface | Select-Object -First 1 | Select-Object -ExpandProperty ipv4 -First 1 | Select-Object -ExpandProperty ipAddress -First 1 | Select-Object -ExpandProperty publicIpAddress -First 1
-            $publicIpAddressReportedFromAwsCheckIpService = Invoke-RestMethod -Uri https://checkip.amazonaws.com -WebSession $webSession
-            if ($publicIpAddressReportedFromAwsCheckIpService)
-            {
-                $publicIpAddressReportedFromAwsCheckIpService = $publicIpAddressReportedFromAwsCheckIpService.Trim()
-            }
-        }
-        else
-        {
-            $imdReturnedExpectedResult = $false
-            Out-Log $imdReturnedExpectedResult -color Red -endLine
-            New-Check -name 'IMDS endpoint 169.254.169.254:80 returned expected result' -result 'FAILED' -details ''
-        }
-    }
-
-    <#  Moved "isAzureVM" check earlier so it can be used as a conditional for other checks
-    if ($imdsReachable.Succeeded -eq $false)
-    {
-        Out-Log 'DHCP request returns option 245:' -startLine
-        $dhcpReturnedOption245 = Confirm-AzureVM
-        if ($dhcpReturnedOption245)
-        {
-            Out-Log $dhcpReturnedOption245 -color Green -endLine
-        }
-        else
-        {
-            Out-Log $dhcpReturnedOption245 -color Yellow -endLine
-        }
-    }
-    #>
-
-    if ($wireserverPort80Reachable.Succeeded -and $wireserverPort32526Reachable.Succeeded -and $isVMAgentInstalled)
-    {
-        Out-Log 'Getting status from aggregatestatus.json' -verboseOnly
-        $aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
-        $aggregateStatus = Get-Content -Path $aggregateStatusJsonFilePath
-        $aggregateStatus = $aggregateStatus -replace '\0' | ConvertFrom-Json
-
-        $aggregateStatusGuestAgentStatusVersion = $aggregateStatus.aggregateStatus.guestAgentStatus.version
-        $aggregateStatusGuestAgentStatusStatus = $aggregateStatus.aggregateStatus.guestAgentStatus.status
-        $aggregateStatusGuestAgentStatusMessage = $aggregateStatus.aggregateStatus.guestAgentStatus.formattedMessage.message
-        $aggregateStatusGuestAgentStatusLastStatusUploadMethod = $aggregateStatus.aggregateStatus.guestAgentStatus.lastStatusUploadMethod
-        $aggregateStatusGuestAgentStatusLastStatusUploadTime = $aggregateStatus.aggregateStatus.guestAgentStatus.lastStatusUploadTime
-
-        Out-Log "Version: $aggregateStatusGuestAgentStatusVersion" -verboseOnly
-        Out-Log "Status: $aggregateStatusGuestAgentStatusStatus" -verboseOnly
-        Out-Log "Message: $aggregateStatusGuestAgentStatusMessage" -verboseOnly
-        Out-Log "LastStatusUploadMethod: $aggregateStatusGuestAgentStatusLastStatusUploadMethod" -verboseOnly
-        Out-Log "LastStatusUploadTime: $aggregateStatusGuestAgentStatusLastStatusUploadTime" -verboseOnly
-
-        $headers = @{'x-ms-version' = '2012-11-30'}
-        $proxy = New-Object System.Net.WebProxy
-        $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-        $webSession.Proxy = $proxy
-
-        $goalState = Invoke-RestMethod -Method GET -Uri 'http://168.63.129.16/machine?comp=goalstate' -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty GoalState
-
-        $hostingEnvironmentConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.HostingEnvironmentConfig
-        $sharedConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.SharedConfig
-        $extensionsConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.ExtensionsConfig
-        $fullConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.FullConfig
-        $certificatesUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.Certificates
-        $configName = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.ConfigName
-
-        $hostingEnvironmentConfig = Invoke-RestMethod -Method GET -Uri $hostingEnvironmentConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty HostingEnvironmentConfig
-        $sharedConfig = Invoke-RestMethod -Method GET -Uri $sharedConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty SharedConfig
-        $extensions = Invoke-RestMethod -Method GET -Uri $extensionsConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty Extensions
-        $rdConfig = Invoke-RestMethod -Method GET -Uri $fullConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty RDConfig
-        $storedCertificate = $rdConfig.StoredCertificates.StoredCertificate | Where-Object {$_.name -eq 'TenantEncryptionCert'}
-        $tenantEncryptionCertThumbprint = $storedCertificate.certificateId -split ':' | Select-Object -Last 1
-        $tenantEncryptionCert = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object {$_.Thumbprint -eq $tenantEncryptionCertThumbprint}
-
-        $statusUploadBlobUri = $extensions.StatusUploadBlob.'#text'
-        $inVMGoalStateMetaData = $extensions.InVMGoalStateMetaData
-    }
-
-    if ($isVMAgentInstalled)
-    {
-        Get-ThirdPartyLoadedModules -processName 'WaAppAgent'
-        Get-ThirdPartyLoadedModules -processName 'WindowsAzureGuestAgent'
-    }
+    New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'OK' -details ''
+    Out-Log "$($wireserverPort80Reachable.Succeeded) $($wireserverPort80Reachable.Error)" -color Green -endLine
 }
 else
 {
-    New-Check -name 'Third-party modules in WaAppAgent' -result 'SKIPPED' -details "Skipped (VM agent installed: $isVMAgentInstalled)"
-    Out-Log "Third-party modules in WaAppAgent: Skipped (VM agent installed: $isVMAgentInstalled)"
+    New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'FAILED' -details ''
+    Out-Log $wireserverPort80Reachable.Succeeded -color Red -endLine
+    New-Finding -type Critical -name 'Wireserver endpoint 168.63.129.16:80 not reachable' -description $description -mitigation $mitigation
+}
 
-    New-Check -name 'Third-party modules in WindowsAzureGuestAgent' -result 'SKIPPED' -details "Skipped (VM agent installed: $isVMAgentInstalled)"
-    Out-Log "Third-party modules in WindowsAzureGuestAgent: Skipped (VM agent installed: $isVMAgentInstalled)"
+Out-Log 'Wireserver endpoint 168.63.129.16:32526 reachable:' -startLine
+$wireserverPort32526Reachable = Test-Port -ipAddress '168.63.129.16' -port 32526 -timeout 1000
+$description = "Wireserver endpoint 168.63.129.16:32526 reachable: $($wireserverPort32526Reachable.Succeeded) $($wireserverPort80Reachable.Error)"
+if ($wireserverPort32526Reachable.Succeeded)
+{
+    New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'OK' -details ''
+    Out-Log $wireserverPort32526Reachable.Succeeded -color Green -endLine
+}
+else
+{
+    New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'FAILED' -details ''
+    Out-Log "$($wireserverPort32526Reachable.Succeeded) $($wireserverPort80Reachable.Error)" -color Red -endLine
+    New-Finding -type Critical -name 'Wireserver endpoint 168.63.129.16:32526 not reachable' -description $description -mitigation $mitigation
+}
 
-    Out-Log "Wireserver endpoint 168.63.129.16:80 reachable: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'Skipped' -details "Azure VM: $isAzureVM"
+Out-Log 'IMDS endpoint 169.254.169.254:80 reachable:' -startLine
+$imdsReachable = Test-Port -ipAddress '169.254.169.254' -port 80 -timeout 1000
+$description = "IMDS endpoint 169.254.169.254:80 reachable: $($imdsReachable.Succeeded) $($imdsReachable.Error)"
+if ($imdsReachable.Succeeded)
+{
+    New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'OK' -details ''
+    Out-Log $imdsReachable.Succeeded -color Green -endLine
+}
+else
+{
+    New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'FAILED' -details ''
+    Out-Log "$($imdsReachable.Succeeded) $($imdsReachable.Error)" -color Red -endLine
+    New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation "Ensure that there is network connectivity to 169.254.169.254 on port 80"
+}
 
-    Out-Log "Wireserver endpoint 168.63.129.16:32526 reachable: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'Skipped' -details "Azure VM: $isAzureVM"
+if ($imdsReachable.Succeeded)
+{
+    Out-Log 'IMDS endpoint 169.254.169.254:80 returned expected result:' -startLine
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
+    # Below three lines have it use a null proxy, bypassing any configured proxy
+    # See also https://github.com/microsoft/azureimds/blob/master/IMDSSample.ps1
+    $proxy = New-Object System.Net.WebProxy
+    $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $webSession.Proxy = $proxy
+    $apiVersions = Invoke-RestMethod -Headers @{'Metadata' = 'true'} -Method GET -Uri 'http://169.254.169.254/metadata/versions' -WebSession $webSession | Select-Object -ExpandProperty apiVersions
+    $apiVersion = $apiVersions | Select-Object -Last 1
+    $metadata = Invoke-RestMethod -Headers @{'Metadata' = 'true'} -Method GET -Uri "http://169.254.169.254/metadata/instance?api-version=$apiVersion" -WebSession $webSession
+    $compute = $metadata | Select-Object -ExpandProperty compute -ErrorAction SilentlyContinue
 
-    Out-Log "IMDS endpoint 169.254.169.254:80 reachable: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'Skipped' -details "Azure VM: $isAzureVM"
+    if ($compute)
+    {
+        $imdReturnedExpectedResult = $true
+        Out-Log $imdReturnedExpectedResult -color Green -endLine
+        New-Check -name 'IMDS endpoint 169.254.169.254:80 returned expected result' -result 'OK' -details ''
 
-    Out-Log "IMDS endpoint 169.254.169.254:80 returned expected result: Skipped (Azure VM: $isAzureVM)"
-    New-Check -name 'IMDS endpoint 169.254.169.254:80 returned expected result' -result 'Skipped' -details "Azure VM: $isAzureVM"
+        $global:dbgMetadata = $metadata
+
+        $azEnvironment = $metadata.compute.azEnvironment
+        $vmName = $metadata.compute.name
+        $vmId = $metadata.compute.vmId
+        $resourceId = $metadata.compute.resourceId
+        $licenseType = $metadata.compute.licenseType
+        $planPublisher = $metadata.compute.plan.publisher
+        $planProduct = $metadata.compute.plan.product
+        $planName = $metadata.compute.plan.name
+        $osDiskDiskSizeGB = $metadata.compute.storageProfile.osDisk.diskSizeGB
+        $osDiskManagedDiskId = $metadata.compute.storageProfile.osDisk.managedDisk.id
+        $osDiskManagedDiskStorageAccountType = $metadata.compute.storageProfile.osDisk.managedDisk.storageAccountType
+        $osDiskCreateOption = $metadata.compute.storageProfile.osDisk.createOption
+        $osDiskCaching = $metadata.compute.storageProfile.osDisk.caching
+        $osDiskDiffDiskSettingsOption = $metadata.compute.storageProfile.osDisk.diffDiskSettings.option
+        $osDiskEncryptionSettingsEnabled = $metadata.compute.storageProfile.osDisk.encryptionSettings.enabled
+        $osDiskImageUri = $metadata.compute.storageProfile.osDisk.image.uri
+        $osDiskName = $metadata.compute.storageProfile.osDisk.name
+        $osDiskOsType = $metadata.compute.storageProfile.osDisk.osType
+        $osDiskVhdUri = $metadata.compute.storageProfile.osDisk.vhd.uri
+        $osDiskWriteAcceleratorEnabled = $metadata.compute.storageProfile.osDisk.writeAcceleratorEnabled
+        $encryptionAtHost = $metadata.compute.securityProfile.encryptionAtHost
+        $secureBootEnabled = $metadata.compute.securityProfile.secureBootEnabled
+        $securityType = $metadata.compute.securityProfile.securityType
+        $virtualTpmEnabled = $metadata.compute.securityProfile.virtualTpmEnabled
+        $virtualMachineScaleSetId = $metadata.compute.virtualMachineScaleSet.id
+        $vmScaleSetName = $metadata.compute.vmScaleSetName
+        $zone = $metadata.compute.zone
+        $dataDisks = $metadata.compute.storageProfile.dataDisks
+        $priority = $metadata.compute.priority
+        $platformFaultDomain = $metadata.compute.platformFaultDomain
+        $platformSubFaultDomain = $metadata.compute.platformSubFaultDomain
+        $platformUpdateDomain = $metadata.compute.platformUpdateDomain
+        $placementGroupId = $metadata.compute.placementGroupId
+        $extendedLocationName = $metadata.compute.extendedLocationName
+        $extendedLocationType = $metadata.compute.extendedLocationType
+        $evictionPolicy = $metadata.compute.evictionPolicy
+        $hostId = $metadata.compute.hostId
+        $hostGroupId = $metadata.compute.hostGroupId
+        $isHostCompatibilityLayerVm = $metadata.compute.isHostCompatibilityLayerVm
+        $hibernationEnabled = $metadata.compute.additionalCapabilities.hibernationEnabled
+        $subscriptionId = $metadata.compute.subscriptionId
+        $resourceGroupName = $metadata.compute.resourceGroupName
+        $location = $metadata.compute.location
+        $vmSize = $metadata.compute.vmSize
+        $vmIdFromImds = $metadata.compute.vmId
+        $publisher = $metadata.compute.publisher
+        $offer = $metadata.compute.offer
+        $sku = $metadata.compute.sku
+        $version = $metadata.compute.version
+        $imageReferenceId = $metadata.compute.storageProfile.imageReference.id
+        if ($publisher)
+        {
+            $imageReference = "$publisher|$offer|$sku|$version"
+        }
+        else
+        {
+            if ($imageReferenceId)
+            {
+                $imageReference = "$($imageReferenceId.Split('/')[-1]) (custom image)"
+            }
+        }
+        $interfaces = $metadata.network.interface
+        $macAddress = $metadata.network.interface.macAddress
+        $privateIpAddress = $metadata.network.interface | Select-Object -First 1 | Select-Object -ExpandProperty ipv4 -First 1 | Select-Object -ExpandProperty ipAddress -First 1 | Select-Object -ExpandProperty privateIpAddress -First 1
+        $publicIpAddress = $metadata.network.interface | Select-Object -First 1 | Select-Object -ExpandProperty ipv4 -First 1 | Select-Object -ExpandProperty ipAddress -First 1 | Select-Object -ExpandProperty publicIpAddress -First 1
+        $publicIpAddressReportedFromAwsCheckIpService = Invoke-RestMethod -Uri https://checkip.amazonaws.com -WebSession $webSession
+        if ($publicIpAddressReportedFromAwsCheckIpService)
+        {
+            $publicIpAddressReportedFromAwsCheckIpService = $publicIpAddressReportedFromAwsCheckIpService.Trim()
+        }
+    }
+    else
+    {
+        $imdReturnedExpectedResult = $false
+        Out-Log $imdReturnedExpectedResult -color Red -endLine
+        New-Check -name 'IMDS endpoint 169.254.169.254:80 returned expected result' -result 'FAILED' -details ''
+    }
+}
+
+<#  Moved "isAzureVM" check earlier so it can be used as a conditional for other checks
+if ($imdsReachable.Succeeded -eq $false)
+{
+    Out-Log 'DHCP request returns option 245:' -startLine
+    $dhcpReturnedOption245 = Confirm-AzureVM
+    if ($dhcpReturnedOption245)
+    {
+        Out-Log $dhcpReturnedOption245 -color Green -endLine
+    }
+    else
+    {
+        Out-Log $dhcpReturnedOption245 -color Yellow -endLine
+    }
+}
+#>
+
+if ($wireserverPort80Reachable.Succeeded -and $wireserverPort32526Reachable.Succeeded -and $isVMAgentInstalled)
+{
+    Out-Log 'Getting status from aggregatestatus.json' -verboseOnly
+    $aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
+    $aggregateStatus = Get-Content -Path $aggregateStatusJsonFilePath
+    $aggregateStatus = $aggregateStatus -replace '\0' | ConvertFrom-Json
+
+    $aggregateStatusGuestAgentStatusVersion = $aggregateStatus.aggregateStatus.guestAgentStatus.version
+    $aggregateStatusGuestAgentStatusStatus = $aggregateStatus.aggregateStatus.guestAgentStatus.status
+    $aggregateStatusGuestAgentStatusMessage = $aggregateStatus.aggregateStatus.guestAgentStatus.formattedMessage.message
+    $aggregateStatusGuestAgentStatusLastStatusUploadMethod = $aggregateStatus.aggregateStatus.guestAgentStatus.lastStatusUploadMethod
+    $aggregateStatusGuestAgentStatusLastStatusUploadTime = $aggregateStatus.aggregateStatus.guestAgentStatus.lastStatusUploadTime
+
+    Out-Log "Version: $aggregateStatusGuestAgentStatusVersion" -verboseOnly
+    Out-Log "Status: $aggregateStatusGuestAgentStatusStatus" -verboseOnly
+    Out-Log "Message: $aggregateStatusGuestAgentStatusMessage" -verboseOnly
+    Out-Log "LastStatusUploadMethod: $aggregateStatusGuestAgentStatusLastStatusUploadMethod" -verboseOnly
+    Out-Log "LastStatusUploadTime: $aggregateStatusGuestAgentStatusLastStatusUploadTime" -verboseOnly
+
+    $headers = @{'x-ms-version' = '2012-11-30'}
+    $proxy = New-Object System.Net.WebProxy
+    $webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $webSession.Proxy = $proxy
+
+    $goalState = Invoke-RestMethod -Method GET -Uri 'http://168.63.129.16/machine?comp=goalstate' -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty GoalState
+
+    $hostingEnvironmentConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.HostingEnvironmentConfig
+    $sharedConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.SharedConfig
+    $extensionsConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.ExtensionsConfig
+    $fullConfigUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.FullConfig
+    $certificatesUri = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.Certificates
+    $configName = $goalState.Container.RoleInstanceList.RoleInstance.Configuration.ConfigName
+
+    $hostingEnvironmentConfig = Invoke-RestMethod -Method GET -Uri $hostingEnvironmentConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty HostingEnvironmentConfig
+    $sharedConfig = Invoke-RestMethod -Method GET -Uri $sharedConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty SharedConfig
+    $extensions = Invoke-RestMethod -Method GET -Uri $extensionsConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty Extensions
+    $rdConfig = Invoke-RestMethod -Method GET -Uri $fullConfigUri -Headers $headers -WebSession $webSession | Select-Object -ExpandProperty RDConfig
+    $storedCertificate = $rdConfig.StoredCertificates.StoredCertificate | Where-Object {$_.name -eq 'TenantEncryptionCert'}
+    $tenantEncryptionCertThumbprint = $storedCertificate.certificateId -split ':' | Select-Object -Last 1
+    $tenantEncryptionCert = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object {$_.Thumbprint -eq $tenantEncryptionCertThumbprint}
+
+    $statusUploadBlobUri = $extensions.StatusUploadBlob.'#text'
+    $inVMGoalStateMetaData = $extensions.InVMGoalStateMetaData
+}
+
+if ($isVMAgentInstalled)
+{
+    Get-ThirdPartyLoadedModules -processName 'WaAppAgent'
+    Get-ThirdPartyLoadedModules -processName 'WindowsAzureGuestAgent'
 }
 
 if ($skipFirewall -eq $false)
@@ -3433,11 +3342,7 @@ https://www.w3schools.com/howto/howto_js_accordion.asp
 #>
 $css | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 
-if ($isAzureVM)
-{
-    [void]$stringBuilder.Append("VM Name: <span style='font-weight:bold'>$vmName</span> VMID: <span style='font-weight:bold'>$vmId</span>")
-}
-elseif ($isHyperVGuest)
+if ($isHyperVGuest)
 {
     $virtualMachineName = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters' | Select-Object -ExpandProperty VirtualMachineName
     $virtualMachineId = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters' | Select-Object -ExpandProperty VirtualMachineId
