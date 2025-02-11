@@ -708,19 +708,19 @@ function Get-ServiceChecks
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $true -and $isExpectedStartType -eq $false)
             {
                 New-Check -name "$name service" -result 'FAILED' -details $details
-                New-Finding -type 'Warning' -name "$name service start type $startType (expected: $expectedStartType)" -description $details -mitigation "We recommend setting the 'Startup Type' of the $name service to 'Automatic'. Please open services.msc, double click the $name service, and change the 'Startup Type' to 'Automatic'"
+                New-Finding -type 'Warning' -name "$name service start type $startType (expected: $expectedStartType)" -description $details -mitigation "We recommend setting the 'Startup Type' of the $name service to '$expectedStartType'. Please open services.msc, double click the $name service, and change the 'Startup Type' to '$expectedStartType'"
                 Out-Log "Status: $status (expected $expectedStatus) StartType: $startType (expected $expectedStartType)" -color Red -endLine
             }
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $false -and $isExpectedStartType -eq $true)
             {
                 New-Check -name "$name service" -result 'FAILED' -details $details
-                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "The $name service is not currently Running. Open services.msc and start the service."
+                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "The $name service is not currently $expectedStatus. Open services.msc and start the service."
                 Out-Log "Status: $status (expected $expectedStatus) StartType: $startType (expected $expectedStartType)" -color Red -endLine
             }
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $false -and $isExpectedStartType -eq $false)
             {
                 New-Check -name "$name service" -result 'FAILED' -details $details
-                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "</br>The $name service is not currently Running. Open services.msc and start the service. </br></br> We also recommend setting the 'Startup Type' of the $name service to 'Automatic'. Please open services.msc, double click the $name service, and change the 'Startup Type' to 'Automatic'"
+                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "</br>The $name service is not currently $expectedStatus. Open services.msc and start the service. </br></br> We also recommend setting the 'Startup Type' of the $name service to '$expectedStartType'. Please open services.msc, double click the $name service, and change the 'Startup Type' to '$expectedStartType'"
                 Out-Log "Status: $status (expected $expectedStatus) StartType: $startType (expected $expectedStartType)" -color Red -endLine
             }
 
@@ -2357,7 +2357,7 @@ if ($isAzureVM)
     {
         New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'FAILED' -details ''
         Out-Log "$($imdsReachable.Succeeded) $($imdsReachable.Error)" -color Red -endLine
-        New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation "Ensure that there is network connectivity to 169.254.169.254 on ports 80"
+        New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation "Ensure that there is network connectivity to 169.254.169.254 on port 80"
     }
 
     if ($imdsReachable.Succeeded)
