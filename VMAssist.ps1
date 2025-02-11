@@ -22,7 +22,7 @@ param (
     [string]$outputPath = 'C:\logs',
     [switch]$fakeFinding,
     [switch]$skipFirewall,
-    [switch]$skipFilters,
+    [switch]$showFilters = $false,
     [switch]$useDotnetForNicDetails = $true,
     [switch]$showLog,
     [switch]$showReport,
@@ -253,6 +253,7 @@ function Get-WCFConfig
     }
 }
 
+#Confirms this is a VM running in HyperV
 function Confirm-HyperVGuest
 {
     # SystemManufacturer/SystemProductName valus are in different locations depending if Gen1 vs Gen2
@@ -283,6 +284,7 @@ function Confirm-HyperVGuest
     return $isHyperVGuest
 }
 
+#Gets crashing applications with eventId 1000 in the last day
 function Get-ApplicationErrors
 {
     param(
@@ -309,6 +311,7 @@ function Get-ApplicationErrors
     }
 }
 
+#Gets crashing services with eventId 7031 or 7034 in the last day
 function Get-ServiceCrashes
 {
     param(
@@ -336,6 +339,7 @@ function Get-ServiceCrashes
     }
 }
 
+#Gets Windows Filtering Platform (WFP)
 function Get-WfpFilters
 {
     Out-Log 'Getting WFP filters:' -startLine
@@ -378,6 +382,8 @@ function Get-WfpFilters
     return $result
 }
 
+#Gets enabled Firewall rules
+
 function Get-EnabledFirewallRules
 {
     Out-Log 'Getting enabled Windows firewall rules: ' -startLine
@@ -416,6 +422,7 @@ function Get-EnabledFirewallRules
     return $enabledFirewallRules
 }
 
+#Gets 3rd party (non-microsoft) modlules loaded into a process
 # Get-Process WaAppAgent,WindowsAzureGuestAgent | Select-Object -ExpandProperty modules | Select-Object ModuleName, company, description, product, filename, @{Name = 'Version'; Expression = {$_.FileVersionInfo.FileVersion}} | Sort-Object company | ft ModuleName,Company,Description -a
 function Get-ThirdPartyLoadedModules
 {
@@ -475,6 +482,7 @@ function Get-ThirdPartyLoadedModules
     }
 }
 
+#Gets Services
 function Get-Services
 {
     $services = Get-CimInstance -Query 'SELECT DisplayName,Description,ErrorControl,ExitCode,Name,PathName,ProcessId,StartMode,StartName,State,ServiceSpecificExitCode,ServiceType FROM Win32_Service' -ErrorAction SilentlyContinue
@@ -519,6 +527,7 @@ function Get-Services
     return $services
 }
 
+#Performs check on a service to verify its expected status and expected start type
 function Get-ServiceChecks
 {
     param(
@@ -889,6 +898,7 @@ function Invoke-ExpressionWithLogging
     }
 }
 
+#Tests connectivity to an IP/port
 function Test-Port
 {
     param(
@@ -941,6 +951,7 @@ function Test-Port
     $tcpClient.Dispose()
 }
 
+#Adds a check to the $checks list
 function New-Check
 {
     param(
@@ -964,6 +975,7 @@ function New-Check
 
 }
 
+#Adds a check to the $findings list
 function New-Finding
 {
     param(
@@ -989,6 +1001,7 @@ function New-Finding
     $global:dbgFinding = $finding
 }
 
+#Gets list of drivers
 function Get-Drivers
 {
     # Both Win32_SystemDriver and Driverquery.exe use WMI, and Win32_SystemDriver is faster
@@ -1046,6 +1059,7 @@ CN=Microsoft Windows Verification PCA, O=Microsoft Corporation, L=Redmond, S=Was
     return $runningDrivers
 }
 
+#Checks if joined to a domain
 function Get-JoinInfo
 {
     $netApi32MemberDefinition = @'
@@ -1162,8 +1176,20 @@ public class NetAPI32{
     return $joinInfo
 }
 
+#Gets handlers listed in aggregateStatus.json and outputs an array of extensions
 function Get-Extensions
 {
+    $extensions = New-Object System.Collections.Generic.List[Object]
+    $extension = [PSCustomObject]@{
+        handlerName = $null; 
+        handlerVersion = $null; 
+        handlerStatus = $null; 
+        sequenceNumber = $null; 
+        timestampUTC = $null; 
+        status = $null; 
+        message = $null
+    }
+
     if ($isVMAgentInstalled)
         {
             $windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
@@ -1172,8 +1198,31 @@ function Get-Extensions
             $aggregateStatus = Get-Content -Path $aggregateStatusJsonFilePath
             $aggregateStatus = $aggregateStatus -replace '\0' | ConvertFrom-Json
             $handlerKeyNames = $aggregateStatus.aggregateStatus.handlerAggregateStatus
+            
+            foreach ($handlerKeyName in $handlerKeyNames)
+            {
+                $extension.handlerName = $handlerKeyName.handlername
+                $extension.handlerVersion = $handlerKeyName.handlerVersion
+                $extension.handlerStatus = $handlerKeyName.status
+                $extension.sequenceNumber = $handlerKeyName.runtimeSettingsStatus.sequenceNumber
+                $extension.timestampUTC = $handlerKeyName.runtimeSettingsStatus.settingsStatus.timestampUTC
+                $extension.status = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.status
+                $extension.message = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.formattedMessage.message
+
+                $extensions.Add($extension)
+                $extension = [PSCustomObject]@{
+                    handlerName = $null; 
+                    handlerVersion = $null; 
+                    handlerStatus = $null; 
+                    sequenceNumber = $null; 
+                    timestampUTC = $null; 
+                    status = $null; 
+                    message = $null
+                }
+            
+            }
         }    
-    return $handlerKeyNames
+    return $extensions
 }
 
 #endregion functions
@@ -1251,9 +1300,9 @@ if ($skipPSVersionCheck -ne $true -and ($psVersion -lt [version]'4.0' -or $psVer
         {
             $vmAssistCommand = "$vmAssistCommand -skipFirewall"
         }
-        if ($skipFilters)
+        if ($showFilters)
         {
-            $vmAssistCommand = "$vmAssistCommand -skipFilters"
+            $vmAssistCommand = "$vmAssistCommand -showFilters"
         }
         if ($useDotnetForNicDetails)
         {
@@ -2125,7 +2174,7 @@ if ($skipFirewall -eq $false)
 {
     $enabledFirewallRules = Get-EnabledFirewallRules
 }
-if ($skipFilters -eq $false)
+if ($showFilters -eq $true)
 {
     $wfpFilters = Get-WfpFilters
 }
@@ -3097,20 +3146,14 @@ $vmAgentTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('<div id="Extensions" class="tabcontent">')
     
 $extensions = Get-Extensions
-$extension = [PSCustomObject]@{handlerName = $null; handlerVersion = $null; handlerStatus = $null; sequenceNumber = $null; timestampUTC = $null; status = $null; message = $null}
-foreach ($handlerKeyName in $extensions)
+foreach ($extension in $extensions)
 {
-    $handlerName = Split-Path -Path $handlerKeyName.handlerName -Leaf
+    $handlerName = $extension.handlerName
     [void]$stringBuilder.Append("<h3>$handlerName</h3>`r`n")
-    $extension.handlerVersion = $handlerKeyName.handlerVersion
-    $extension.handlerStatus = $handlerKeyName.status
-    $extension.sequenceNumber = $handlerKeyName.runtimeSettingsStatus.sequenceNumber
-    $extension.timestampUTC = $handlerKeyName.runtimeSettingsStatus.settingsStatus.timestampUTC
-    $extension.status = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.status
-    $extension.message = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.formattedMessage.message
     $vmHandlerValuesTable = $extension | Select-Object handlerVersion, handlerStatus, sequenceNumber, timestampUTC, status, message | ConvertTo-Html -Fragment -As Table
     $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 }
+
 [void]$stringBuilder.Append('</div>')
 
 [void]$stringBuilder.Append('<div id="Network" class="tabcontent">')
@@ -3152,6 +3195,8 @@ else
     [void]$stringBuilder.Append("<h4>There are no enabled outbound Windows Firewall rules</h4>`r`n")
 }
 
+if ($showFilters -eq $true)
+{
 [void]$stringBuilder.Append("<h3>Windows Filtering Platform Filters - Wireserver</h3>`r`n")
 $wireserverWfpFiltersTable = $wfpFilters.wireserverFilters | ConvertTo-Html -Fragment -As Table
 $wireserverWfpFiltersTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
@@ -3161,6 +3206,7 @@ $wfpFiltersTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append("<h3>Windows Filtering Platform Providers</h3>`r`n")
 $wfpProvidersTable = $wfpFilters.Providers | ConvertTo-Html -Fragment -As Table
 $wfpProvidersTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
+}
 [void]$stringBuilder.Append('</div>')
 
 [void]$stringBuilder.Append('<div id="Services" class="tabcontent">')
