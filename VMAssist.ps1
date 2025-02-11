@@ -91,40 +91,6 @@ $MethodDefinition = @'
 '@
 $asm = Add-Type -TypeDefinition $MethodDefinition -PassThru -ErrorAction SilentlyContinue
 
-function Remove-Color
-{
-    param(
-        [string]$string
-    )
-
-    $cleanedString = $string -replace "`e\[\d+m", ""
-
-    return $cleanedString
-}
-
-function GetProxySettings
-{
-    $proxycfg = [PSCustomObject]@{}
-    $IEProxyConfig = New-Object WinhttpCurrentUserIeProxyConfig
-    [WinHttp]::WinHttpGetIEProxyConfigForCurrentUser([ref]$IEProxyConfig) | Out-Null
-
-    $WINHTTPPROXY = New-Object WINHTTP_PROXY_INFO
-    [WinHttp]::WinHttpGetDefaultProxyConfiguration([ref]$WINHTTPPROXY) | Out-Null
-
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'IE_ProxySetting_CurrentUser' -Value '------------------'
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'IE_ProxySetting_AutoDetect' -Value $IEProxyConfig.AutoDetect
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'IE_ProxySetting_AutoConfigUrl' -Value $IEProxyConfig.AutoConfigUrl
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'IE_ProxySetting_ProxName' -Value $IEProxyConfig.Proxy
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'IE_ProxySetting_ProxyBypass' -Value $IEProxyConfig.ProxyBypass
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'WinHTTP_Proxy_Setting' -Value '------------------'
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'WinHTTP_Proxy_AutoDetect' -Value $WINHTTPPROXY.AccessType
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'WinHTTP_Proxy_ProxName' -Value $WINHTTPPROXY.Proxy
-    $proxycfg | Add-Member -MemberType NoteProperty -Name 'WinHTTP_Proxy_ProxyBypass' -Value $WINHTTPPROXY.Bypass
-
-    return $proxycfg
-}
-
-
 function Get-Age
 {
     param(
@@ -450,29 +416,6 @@ function Get-EnabledFirewallRules
     return $enabledFirewallRules
 }
 
-function Get-Counters
-{
-    $counters = @(
-        '\System\Processor Queue Length',
-        '\Memory\Pages/sec',
-        '\Memory\Available MBytes',
-        '\Processor(*)\% Processor Time',
-        '\Network Interface(*)\Bytes Received/sec',
-        '\Network Interface(*)\Bytes Sent/sec',
-        '\LogicalDisk(C:)\% Free Space',
-        '\LogicalDisk(*)\Avg. Disk Queue Length'
-    )
-    $counterValues = Get-Counter -Counter $counters -SampleInterval 5 -MaxSamples 5
-    $counterSamples = $counterValues.CounterSamples
-    $readings = $counterValues.Readings
-}
-
-function Get-FirewallProfiles
-{
-    $firewallProfiles = Get-NetFirewallProfile
-    return $firewallProfiles
-}
-
 # Get-Process WaAppAgent,WindowsAzureGuestAgent | Select-Object -ExpandProperty modules | Select-Object ModuleName, company, description, product, filename, @{Name = 'Version'; Expression = {$_.FileVersionInfo.FileVersion}} | Sort-Object company | ft ModuleName,Company,Description -a
 function Get-ThirdPartyLoadedModules
 {
@@ -752,60 +695,6 @@ function Get-ServiceChecks
         New-Finding -type 'Critical' -name "$name service is not installed" -description '' -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
         Out-Log 'Not Installed' -color Red -endLine
     }
-}
-
-function Get-RegKey
-{
-    <#
-    'HKLM:\SOFTWARE\Microsoft\GuestAgent'
-    'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest'
-    'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Auto'
-    'HKLM:\SOFTWARE\Microsoft\Windows Azure'
-    'HKLM:\SOFTWARE\Microsoft\Windows Azure\GuestAgentUpdateState'
-    'HKLM:\SOFTWARE\Microsoft\Windows Azure\HandlerState'
-
-    REG_DWORD     System.Int32
-    REG_SZ        System.String
-    REG_QWORD     System.Int64
-    REG_BINARY    System.Byte[]
-    REG_MULTI_SZ  System.String[]
-    REG_EXPAND_SZ System.String
-    #>
-
-    param(
-        [string]$path,
-        [switch]$recurse
-    )
-
-    $regKeyValues = New-Object System.Collections.Generic.List[Object]
-
-    if ($recurse)
-    {
-        $regKeys = Get-ChildItem -Path $path -Recurse
-    }
-    else
-    {
-        $regKeys = Get-Item -Path $path
-    }
-
-    foreach ($regKey in $regKeys)
-    {
-        $valueNames = $regKey.GetValueNames()
-        foreach ($valueName in $valueNames)
-        {
-            $valueData = $regKey.GetValue($valueName)
-            $valueType = $regKey.GetValueKind($valueName)
-            $regKeyValue = [PSCustomObject]@{
-                SubkeyName = $regKey.Name
-                ValueName  = $valueName
-                ValueData  = $valueData
-                ValueType  = $valueType
-            }
-            $regKeyValues.Add($regKeyValue)
-        }
-    }
-    $regKeyValues = $regKeyValues | Sort-Object -Property Name
-    return $regKeyValues
 }
 
 function Out-Log
@@ -1273,246 +1162,20 @@ public class NetAPI32{
     return $joinInfo
 }
 
-function Confirm-AzureVM
+function Get-Extensions
 {
-    $typeDefinition = @'
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Runtime.InteropServices;
-using System.ComponentModel;
-using System.Net.NetworkInformation;
-
-namespace Microsoft.WindowsAzure.Internal
-{
-    /// <summary>
-    /// A simple DHCP client.
-    /// </summary>
-    public class DhcpClient : IDisposable
-    {
-        public DhcpClient()
+    if ($isVMAgentInstalled)
         {
-            uint version;
-            int err = NativeMethods.DhcpCApiInitialize(out version);
-            if (err != 0)
-                throw new Win32Exception(err);
-        }
-
-        public void Dispose()
-        {
-            NativeMethods.DhcpCApiCleanup();
-        }
-
-        /// <summary>
-        /// Gets the available interfaces that are enabled for DHCP.
-        /// </summary>
-        /// <remarks>
-        /// The operational status of the interface is not assessed.
-        /// </remarks>
-        /// <returns></returns>
-        public static IEnumerable<NetworkInterface> GetDhcpInterfaces()
-        {
-            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.NetworkInterfaceType != NetworkInterfaceType.Ethernet) continue;
-                if (!nic.Supports(NetworkInterfaceComponent.IPv4)) continue;
-                IPInterfaceProperties props = nic.GetIPProperties();
-                if (props == null) continue;
-                IPv4InterfaceProperties v4props = props.GetIPv4Properties();
-                if (v4props == null) continue;
-                if (!v4props.IsDhcpEnabled) continue;
-
-                yield return nic;
-            }
-        }
-
-        /// <summary>
-        /// Requests DHCP parameter data.
-        /// </summary>
-        /// <remarks>
-        /// Windows serves the data from a cache when possible.
-        /// With persistent requests, the option is obtained during boot-time DHCP negotiation.
-        /// </remarks>
-        /// <param name="optionId">the option to obtain.</param>
-        /// <param name="isVendorSpecific">indicates whether the option is vendor-specific.</param>
-        /// <param name="persistent">indicates whether the request should be persistent.</param>
-        /// <returns></returns>
-        public byte[] DhcpRequestParams(string adapterName, uint optionId)
-        {
-            uint bufferSize = 1024;
-        Retry:
-            IntPtr buffer = Marshal.AllocHGlobal((int)bufferSize);
-            try
-            {
-                NativeMethods.DHCPCAPI_PARAMS_ARRAY sendParams = new NativeMethods.DHCPCAPI_PARAMS_ARRAY();
-                sendParams.nParams = 0;
-                sendParams.Params = IntPtr.Zero;
-
-                NativeMethods.DHCPCAPI_PARAMS recv = new NativeMethods.DHCPCAPI_PARAMS();
-                recv.Flags = 0x0;
-                recv.OptionId = optionId;
-                recv.IsVendor = false;
-                recv.Data = IntPtr.Zero;
-                recv.nBytesData = 0;
-
-                IntPtr recdParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(recv));
-                try
-                {
-                    Marshal.StructureToPtr(recv, recdParamsPtr, false);
-
-                    NativeMethods.DHCPCAPI_PARAMS_ARRAY recdParams = new NativeMethods.DHCPCAPI_PARAMS_ARRAY();
-                    recdParams.nParams = 1;
-                    recdParams.Params = recdParamsPtr;
-
-                    NativeMethods.DhcpRequestFlags flags = NativeMethods.DhcpRequestFlags.DHCPCAPI_REQUEST_SYNCHRONOUS;
-
-                    int err = NativeMethods.DhcpRequestParams(
-                        flags,
-                        IntPtr.Zero,
-                        adapterName,
-                        IntPtr.Zero,
-                        sendParams,
-                        recdParams,
-                        buffer,
-                        ref bufferSize,
-                        null);
-
-                    if (err == NativeMethods.ERROR_MORE_DATA)
-                    {
-                        bufferSize *= 2;
-                        goto Retry;
-                    }
-
-                    if (err != 0)
-                        throw new Win32Exception(err);
-
-                    recv = (NativeMethods.DHCPCAPI_PARAMS)
-                        Marshal.PtrToStructure(recdParamsPtr, typeof(NativeMethods.DHCPCAPI_PARAMS));
-
-                    if (recv.Data == IntPtr.Zero)
-                        return null;
-
-                    byte[] data = new byte[recv.nBytesData];
-                    Marshal.Copy(recv.Data, data, 0, (int)recv.nBytesData);
-                    return data;
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(recdParamsPtr);
-                }
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
-        }
-
-        ///// <summary>
-        ///// Unregisters a persistent request.
-        ///// </summary>
-        //public void DhcpUndoRequestParams()
-        //{
-        //    int err = NativeMethods.DhcpUndoRequestParams(0, IntPtr.Zero, null, this.ApplicationID);
-        //    if (err != 0)
-        //        throw new Win32Exception(err);
-        //}
-
-        #region Native Methods
-    }
-
-    internal static partial class NativeMethods
-    {
-        public const uint ERROR_MORE_DATA = 124;
-
-        [DllImport("dhcpcsvc.dll", EntryPoint = "DhcpRequestParams", CharSet = CharSet.Unicode, SetLastError = false)]
-        public static extern int DhcpRequestParams(
-            DhcpRequestFlags Flags,
-            IntPtr Reserved,
-            string AdapterName,
-            IntPtr ClassId,
-            DHCPCAPI_PARAMS_ARRAY SendParams,
-            DHCPCAPI_PARAMS_ARRAY RecdParams,
-            IntPtr Buffer,
-            ref UInt32 pSize,
-            string RequestIdStr
-            );
-
-        [DllImport("dhcpcsvc.dll", EntryPoint = "DhcpUndoRequestParams", CharSet = CharSet.Unicode, SetLastError = false)]
-        public static extern int DhcpUndoRequestParams(
-            uint Flags,
-            IntPtr Reserved,
-            string AdapterName,
-            string RequestIdStr);
-
-        [DllImport("dhcpcsvc.dll", EntryPoint = "DhcpCApiInitialize", CharSet = CharSet.Unicode, SetLastError = false)]
-        public static extern int DhcpCApiInitialize(out uint Version);
-
-        [DllImport("dhcpcsvc.dll", EntryPoint = "DhcpCApiCleanup", CharSet = CharSet.Unicode, SetLastError = false)]
-        public static extern int DhcpCApiCleanup();
-
-        [Flags]
-        public enum DhcpRequestFlags : uint
-        {
-            DHCPCAPI_REQUEST_PERSISTENT = 0x01,
-            DHCPCAPI_REQUEST_SYNCHRONOUS = 0x02,
-            DHCPCAPI_REQUEST_ASYNCHRONOUS = 0x04,
-            DHCPCAPI_REQUEST_CANCEL = 0x08,
-            DHCPCAPI_REQUEST_MASK = 0x0F
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct DHCPCAPI_PARAMS_ARRAY
-        {
-            public UInt32 nParams;
-            public IntPtr Params;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct DHCPCAPI_PARAMS
-        {
-            public UInt32 Flags;
-            public UInt32 OptionId;
-            [MarshalAs(UnmanagedType.Bool)]
-            public bool IsVendor;
-            public IntPtr Data;
-            public UInt32 nBytesData;
-        }
-        #endregion
-    }
+            $windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
+            $windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
+            $aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
+            $aggregateStatus = Get-Content -Path $aggregateStatusJsonFilePath
+            $aggregateStatus = $aggregateStatus -replace '\0' | ConvertFrom-Json
+            $handlerKeyNames = $aggregateStatus.aggregateStatus.handlerAggregateStatus
+        }    
+    return $handlerKeyNames
 }
-'@
 
-    $isAzureVM = $false
-
-    $assemblies = [System.AppDomain]::CurrentDomain.GetAssemblies()
-    $isAssemblyLoaded = [bool]($assemblies.ExportedTypes -match 'Microsoft.WindowsAzure.Internal')
-    if ($isAssemblyLoaded -eq $false)
-    {
-        Add-Type -TypeDefinition $typeDefinition
-    }
-
-    $vmbus = Get-Service -Name vmbus
-    if ($vmbus.Status -eq 'Running')
-    {
-        $client = New-Object Microsoft.WindowsAzure.Internal.DhcpClient
-        try
-        {
-            [Microsoft.WindowsAzure.Internal.DhcpClient]::GetDhcpInterfaces() | ForEach-Object {
-                $val = $client.DhcpRequestParams($_.Id, 245)
-                if ($val -And $val.Length -eq 4)
-                {
-                    $isAzureVM = $true
-                }
-            }
-        }
-        finally
-        {
-            $client.Dispose()
-        }
-    }
-
-    return $isAzureVM
-}
 #endregion functions
 
 $eula = @'
@@ -3432,27 +3095,10 @@ $vmAgentTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
 [void]$stringBuilder.Append('<div id="Extensions" class="tabcontent">')
-
-if ($isVMAgentInstalled)
-{
-$windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
-$windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
-$aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
-$aggregateStatus = Get-Content -Path $aggregateStatusJsonFilePath
-$aggregateStatus = $aggregateStatus -replace '\0' | ConvertFrom-Json
-
-$handlerKeyNames = $aggregateStatus.aggregateStatus.handlerAggregateStatus
-
-$extension = [PSCustomObject]@{
-    handlerVersion = $null
-    handlerStatus = $null
-    sequenceNumber = $null
-    timestampUTC = $null
-    status = $null
-    message = $null
-}
-
-foreach ($handlerKeyName in $handlerKeyNames)
+    
+$extensions = Get-Extensions
+$extension = [PSCustomObject]@{handlerName = $null; handlerVersion = $null; handlerStatus = $null; sequenceNumber = $null; timestampUTC = $null; status = $null; message = $null}
+foreach ($handlerKeyName in $extensions)
 {
     $handlerName = Split-Path -Path $handlerKeyName.handlerName -Leaf
     [void]$stringBuilder.Append("<h3>$handlerName</h3>`r`n")
@@ -3462,9 +3108,8 @@ foreach ($handlerKeyName in $handlerKeyNames)
     $extension.timestampUTC = $handlerKeyName.runtimeSettingsStatus.settingsStatus.timestampUTC
     $extension.status = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.status
     $extension.message = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.formattedMessage.message
-    $vmHandlerValuesTable = $extension | ConvertTo-Html -Fragment -As Table
+    $vmHandlerValuesTable = $extension | Select-Object handlerVersion, handlerStatus, sequenceNumber, timestampUTC, status, message | ConvertTo-Html -Fragment -As Table
     $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
-}
 }
 [void]$stringBuilder.Append('</div>')
 
