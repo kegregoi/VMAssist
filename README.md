@@ -1,6 +1,6 @@
 # VMAssist
 
-VMAssist is a PowerShell script you run within the guest operating system of an Azure virtual machine to diagnose common health and configuration issues with the Azure VM Guest Agent. It will also gather various information about the system such as firewall rules, running services, running drivers, installed software, NIC settings, installed Windows Updates.
+VMAssist is a PowerShell script you run within the guest operating system of an Azure virtual machine to diagnose common health and configuration issues with the Azure VM Guest Agent. It will also gather various information about the system such as firewall rules, running services, running drivers, installed software, NIC settings, and installed Windows Updates.
 
 Azure VM Guest Agent health is critical to the proper functioning of Azure VM extensions.
 
