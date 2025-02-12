@@ -1,20 +1,19 @@
 <#
 .SYNOPSIS
-    Assists in diagnosing Azure VM issues
+    Assists in diagnosing Azure VM Guest Agent issues
 .DESCRIPTION
-    Assists in diagnosing Azure VM issues
+    Assists in diagnosing Azure VM Guest Agentissues
 .NOTES
     Supported on Windows Server 2012 R2 and later versions of Windows.
     Supported in Windows PowerShell 4.0+ and PowerShell 6.0+.
     Not supported on Linux.
 .LINK
-    https://github.com/craiglandis/VMAssist/blob/main/README.md
+    https://github.com/kegregoi/VMAssist
 .EXAMPLE
     RDP to Azure VM
     Launch an elevated PowerShell prompt
-    Download VMAssist.ps1 with the following command
-
-    VMAssist.ps1
+    Download and run VMAssist.ps1 with the following command:
+    (Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/VMAssist/refs/heads/main/VMAssist.ps1 -OutFile VMAssist.ps1) | .\VMAssist.ps1
 #>
 #Requires -Version 4
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -433,7 +432,7 @@ function Get-ThirdPartyLoadedModules
     Out-Log "Third-party modules in $($processName):" -startLine
     if ($isVMAgentInstalled)
     {
-        $process = Get-Process -Name WaAppAgent -ErrorAction SilentlyContinue
+        $process = Get-Process -Name $processName -ErrorAction SilentlyContinue
         if ($process)
         {
             $processThirdPartyModules = $process | Select-Object -ExpandProperty modules | Where-Object Company -NE 'Microsoft Corporation' | Select-Object ModuleName, company, description, product, filename, @{Name = 'Version'; Expression = {$_.FileVersionInfo.FileVersion}} | Sort-Object company
@@ -1895,7 +1894,7 @@ if ($proxyConfigured)
 {
     New-Check -name 'Proxy configured' -result 'Info' -details $proxyServers
     Out-Log $proxyConfigured -color Cyan -endLine
-    $mitigation = '<a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows-azure-guest-agent#solution-3-enable-dhcp-and-make-sure-that-the-server-isnt-blocked-by-firewalls-proxies-or-other-sources">Check proxy settings</a>'
+    $mitigation = '<a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows-azure-guest-agent#solution-3-enable-dhcp-and-make-sure-that-the-server-isnt-blocked-by-firewalls-proxies-or-other-sources">Ensure the proxy is not blocking connectivity to 168.63.129.16 on ports 80 or 32526</a>'
     New-Finding -type Information -name 'Proxy configured' -description $proxyServers -mitigation $mitigation
 }
 else
@@ -1999,8 +1998,8 @@ else
 {
     New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'FAILED' -details ''
     Out-Log "$($imdsReachable.Succeeded) $($imdsReachable.Error)" -color Red -endLine
-    New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation "Ensure that there is network connectivity to 169.254.169.254 on port 80"
-}
+    New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service">Ensure that there is network connectivity to 169.254.169.254 (IMDS) on port 80.</a>'
+    }
 
 if ($imdsReachable.Succeeded)
 {
@@ -3144,7 +3143,6 @@ $vmAgentTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
 [void]$stringBuilder.Append('<div id="Extensions" class="tabcontent">')
-    
 $extensions = Get-Extensions
 foreach ($extension in $extensions)
 {
@@ -3153,7 +3151,6 @@ foreach ($extension in $extensions)
     $vmHandlerValuesTable = $extension | Select-Object handlerVersion, handlerStatus, sequenceNumber, timestampUTC, status, message | ConvertTo-Html -Fragment -As Table
     $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 }
-
 [void]$stringBuilder.Append('</div>')
 
 [void]$stringBuilder.Append('<div id="Network" class="tabcontent">')

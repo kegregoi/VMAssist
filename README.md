@@ -22,12 +22,16 @@ RDP into the VM and from an elevated PowerShell window run the following to down
 ## Manual download and run
 Download:
 ```powershell
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/VMAssist/refs/heads/main/VMAssist.ps1
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/VMAssist/refs/heads/main/VMAssist.ps1 -OutFile VMAssist.ps1
 ```
 Run the script:
 ```powershell
 .\VMAssist.ps1
 ```
+## Known issues downloading the file
+If you get this error ```The request was aborted: Could not create SSL/TLS secure channel``` when trying to download the file then either:
+ 1. Run ```[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12``` in the PowerShell window and retry the command
+ 1. Or instead, just manually download the file ```VMAssist.ps1``` [from a web browser.](https://github.com/kegregoi/VMAssist/blob/main/VMAssist.ps1)
 
 # Analyzing output
 
