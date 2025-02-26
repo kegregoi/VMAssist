@@ -1391,7 +1391,7 @@ if ((Test-Path -Path $logFolderPath -PathType Container) -eq $false)
 {
     Invoke-ExpressionWithLogging "New-Item -Path $logFolderPath -ItemType Directory -Force | Out-Null" -verboseOnly
 }
-$computerName = $env:COMPUTERNAME.ToUpper()
+$computerName = [System.Net.Dns]::GetHostName()
 $logFilePath = "$logFolderPath\$($scriptBaseName)_$($computerName)_$($scriptStartTimeString).log"
 if ((Test-Path -Path $logFilePath -PathType Leaf) -eq $false)
 {
@@ -3053,15 +3053,13 @@ https://www.w3schools.com/howto/howto_js_accordion.asp
 #>
 $css | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 
-if ($isHyperVGuest)
-{
-    $virtualMachineName = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters' | Select-Object -ExpandProperty VirtualMachineName
-    $virtualMachineId = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters' | Select-Object -ExpandProperty VirtualMachineId
-    [void]$stringBuilder.Append("VM Name: <span style='font-weight:bold'>$virtualMachineName</span> VMID: <span style='font-weight:bold'>$virtualMachineId</span>")
-}
-else
+if ($computerName)
 {
     [void]$stringBuilder.Append("Computer Name: <span style='font-weight:bold'>$computerName</span>")
+}
+if ($vmId)
+{
+    [void]$stringBuilder.Append(" VMID: <span style='font-weight:bold'>$vmId</span>")
 }
 if ($guestAgentKeyContainerId)
 {
