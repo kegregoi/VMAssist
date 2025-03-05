@@ -38,8 +38,8 @@ If you get this error ```The request was aborted: Could not create SSL/TLS secur
 The script will run a series of checks to analyze the health of the VM Guest Agent and check for various known configurations that could cause issues. Each check will either pass or fail in the PowerShell window. 
 
 Once completed, it will also generate a log file and an html report:
- - C:\logs\VMAssist_*.log
- - C:\logs\VMAssist_*.htm
+ - C:\logs\vmassist_*.log
+ - C:\logs\vmassist_*.htm
 
 The .log file will have a copy of the results that are displayed in the PowerShell window for later reference.
 
