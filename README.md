@@ -1,10 +1,10 @@
-# VMAssist
+# VM assist
 
-VMAssist is a PowerShell script you run within the guest operating system of an Azure virtual machine to diagnose common health and configuration issues with the Azure VM Guest Agent. It will also gather various information about the system such as firewall rules, running services, running drivers, installed software, NIC settings, and installed Windows Updates.
+VM assist is a PowerShell script you run within the guest operating system of an Azure virtual machine to diagnose common health and configuration issues with the Azure VM Guest Agent. It will also gather various information about the system such as firewall rules, running services, running drivers, installed software, NIC settings, and installed Windows Updates.
 
 Azure VM Guest Agent health is critical to the proper functioning of Azure VM extensions.
 
-Running VMAssist generates a report showing the results of each check it performs and suggests mitigations for issues it finds.
+Running VM assist generates a report showing the results of each check it performs and suggests mitigations for issues it finds.
 
 # Prerequisites
 
@@ -16,22 +16,22 @@ Running VMAssist generates a report showing the results of each check it perform
 ## Automatic download and run (recommended)
 RDP into the VM and from an elevated PowerShell window run the following to download and run the script: 
 ```powershell
-(Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/VMAssist/refs/heads/main/VMAssist.ps1 -OutFile VMAssist.ps1) | .\VMAssist.ps1
+(Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/vmassist/refs/heads/main/vmassist.ps1 -OutFile vmassist.ps1) | .\vmassist.ps1
 ```
 
 ## Manual download and run
 Download:
 ```powershell
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/VMAssist/refs/heads/main/VMAssist.ps1 -OutFile VMAssist.ps1
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/vmassist/refs/heads/main/vmassist.ps1 -OutFile vmassist.ps1
 ```
 Run the script:
 ```powershell
-.\VMAssist.ps1
+.\vmassist.ps1
 ```
 ## Known issues downloading the file
 If you get this error ```The request was aborted: Could not create SSL/TLS secure channel``` when trying to download the file then either:
  1. Run ```[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12``` in the PowerShell window and retry the command
- 1. Or instead, just manually download the file ```VMAssist.ps1``` [from a web browser.](https://github.com/kegregoi/VMAssist/blob/main/VMAssist.ps1)
+ 1. Or instead, just manually download the file ```vmassist.ps1``` [from a web browser.](https://github.com/kegregoi/vmassist/blob/main/vmassist.ps1)
 
 # Analyzing output
 

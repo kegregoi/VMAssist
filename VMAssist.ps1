@@ -8,12 +8,12 @@
     Supported in Windows PowerShell 4.0+ and PowerShell 6.0+.
     Not supported on Linux.
 .LINK
-    https://github.com/kegregoi/VMAssist
+    https://github.com/kegregoi/vmassist
 .EXAMPLE
     RDP to Azure VM
     Launch an elevated PowerShell prompt
-    Download and run VMAssist.ps1 with the following command:
-    (Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/VMAssist/refs/heads/main/VMAssist.ps1 -OutFile VMAssist.ps1) | .\VMAssist.ps1
+    Download and run vmassist.ps1 with the following command:
+    (Invoke-WebRequest -Uri https://raw.githubusercontent.com/kegregoi/vmassist/refs/heads/main/vmassist.ps1 -OutFile vmassist.ps1) | .\vmassist.ps1
 #>
 #Requires -Version 4
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -1284,63 +1284,63 @@ if ($skipPSVersionCheck -ne $true -and ($psVersion -lt [version]'4.0' -or $psVer
     [version]$windowsPowerShellVersion = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\PowerShell\3\PowerShellEngine' -Name PowerShellVersion | Select-Object -ExpandProperty PowerShellVersion
     if ($windowsPowerShellVersion -ge [version]'4.0' -and $windowsPowerShellVersion -lt [version]'6.0')
     {
-        #$vmAssistScriptFilePath = 'c:\src\VMAssist\VMAssist.ps1'
-        $vmAssistCommand = $MyInvocation.MyCommand.Path
+        #$vmassistScriptFilePath = 'c:\src\vmassist\vmassist.ps1'
+        $vmassistCommand = $MyInvocation.MyCommand.Path
 
         if ($outputPath)
         {
-            $vmAssistCommand = "$vmAssistCommand -outputPath $outputPath"
+            $vmassistCommand = "$vmassistCommand -outputPath $outputPath"
         }
         if ($fakeFinding)
         {
-            $vmAssistCommand = "$vmAssistCommand -fakeFinding"
+            $vmassistCommand = "$vmassistCommand -fakeFinding"
         }
         if ($skipFirewall)
         {
-            $vmAssistCommand = "$vmAssistCommand -skipFirewall"
+            $vmassistCommand = "$vmassistCommand -skipFirewall"
         }
         if ($showFilters)
         {
-            $vmAssistCommand = "$vmAssistCommand -showFilters"
+            $vmassistCommand = "$vmassistCommand -showFilters"
         }
         if ($useDotnetForNicDetails)
         {
-            $vmAssistCommand = "$vmAssistCommand -useDotnetForNicDetails"
+            $vmassistCommand = "$vmassistCommand -useDotnetForNicDetails"
         }
         if ($showLog)
         {
-            $vmAssistCommand = "$vmAssistCommand -showLog"
+            $vmassistCommand = "$vmassistCommand -showLog"
         }
         if ($showReport)
         {
-            $vmAssistCommand = "$vmAssistCommand -showReport"
+            $vmassistCommand = "$vmassistCommand -showReport"
         }
         if ($acceptEula)
         {
-            $vmAssistCommand = "$vmAssistCommand -acceptEula"
+            $vmassistCommand = "$vmassistCommand -acceptEula"
         }
         if ($listChecks)
         {
-            $vmAssistCommand = "$vmAssistCommand -listChecks"
+            $vmassistCommand = "$vmassistCommand -listChecks"
         }
         if ($listFindings)
         {
-            $vmAssistCommand = "$vmAssistCommand -listFindings"
+            $vmassistCommand = "$vmassistCommand -listFindings"
         }
         if ($skipPSVersionCheck)
         {
-            $vmAssistCommand = "$vmAssistCommand -skipPSVersionCheck"
+            $vmassistCommand = "$vmassistCommand -skipPSVersionCheck"
         }
         if ($verbose)
         {
-            $vmAssistCommand = "$vmAssistCommand -verbose"
+            $vmassistCommand = "$vmassistCommand -verbose"
         }
         if ($debug)
         {
-            $vmAssistCommand = "$vmAssistCommand -debug"
+            $vmassistCommand = "$vmassistCommand -debug"
         }
-        # powershell -noprofile -nologo -Command $vmAssistCommand
-        $command = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -noprofile -nologo -Command $vmAssistCommand"
+        # powershell -noprofile -nologo -Command $vmassistCommand
+        $command = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe -noprofile -nologo -Command $vmassistCommand"
         Invoke-Expression $command
         exit
     }
@@ -1353,7 +1353,7 @@ if ($skipPSVersionCheck -ne $true -and ($psVersion -lt [version]'4.0' -or $psVer
 
 if ($listChecks)
 {
-    $scriptFullName = 'C:\src\VMAssist\VMAssist.ps1'
+    $scriptFullName = 'C:\src\vmassist\vmassist.ps1'
     $script = Get-Content -Path $scriptFullName
     $lines = $script | Select-String -SimpleMatch -Pattern 'New-Check -name' | Select-Object -expand Line | ForEach-Object {$_.Trim()}
     $lines = $lines | ForEach-Object {(($_ -split '-name')[1] -split '-result')[0].Trim()} | Where-Object {$_ -and $_ -notmatch 'Trim'} | Sort-Object -Unique
@@ -1363,7 +1363,7 @@ if ($listChecks)
 
 if ($listFindings)
 {
-    $scriptFullName = 'C:\src\VMAssist\VMAssist.ps1'
+    $scriptFullName = 'C:\src\vmassist\vmassist.ps1'
     $script = Get-Content -Path $scriptFullName
     $lines = $script | Select-String -SimpleMatch -Pattern 'New-Finding -type' | Select-Object -expand Line | ForEach-Object {$_.Trim()}
     $lines = $lines | ForEach-Object {(($_ -split '-name')[1] -split '-description')[0].Trim()} | Where-Object {$_ -and $_ -notmatch 'Trim'} | Sort-Object -Unique
@@ -3055,7 +3055,7 @@ $css | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 
 if ($computerName)
 {
-    [void]$stringBuilder.Append("Computer Name: <span style='font-weight:bold'>$computerName</span>")
+    [void]$stringBuilder.Append("Host Name: <span style='font-weight:bold'>$computerName</span>")
 }
 if ($vmId)
 {
