@@ -2951,7 +2951,7 @@ $css = @'
         }
 
         .accordion:after {
-            content: '\02795'; /* Unicode character for "plus" sign (+) */
+            content: '(Click to expand!) \02795'; /* Unicode character for "plus" sign (+) */
             color: #777;
             float: right;
             margin-left: 5px;
@@ -3028,7 +3028,7 @@ for (i = 0; i < acc.length; i++) {
   acc[i].addEventListener("click", function() {
     /* Toggle between adding and removing the "active" class,
     to highlight the button that controls the panel */
-    this.classList.toggle("active");
+    this.classList.toggle("active2");
 
     /* Toggle between hiding and showing the active panel */
     var panel = this.nextElementSibling;
