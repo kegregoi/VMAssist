@@ -3213,7 +3213,14 @@ $vmServicesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('<div id="Drivers" class="tabcontent">')
 [void]$stringBuilder.Append("<h3 id=`"vmThirdpartyRunningDrivers`">Third-party Running Drivers</h3>`r`n")
 $vmthirdPartyRunningDriversTable = $drivers.thirdPartyRunningDrivers | ConvertTo-Html -Fragment -As Table
-$vmthirdPartyRunningDriversTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
+if($vmThirdpartyRunningDrivers)
+{
+    $vmthirdPartyRunningDriversTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
+}
+else 
+{
+    [void]$stringBuilder.Append("No third-party drivers detected`r`n")
+}
 [void]$stringBuilder.Append("<h3 id=`"vmMicrosoftRunningDrivers`">Microsoft Running Drivers</h3>`r`n")
 $vmMicrosoftRunningDriversTable = $drivers.microsoftRunningDrivers | ConvertTo-Html -Fragment -As Table
 $vmMicrosoftRunningDriversTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
