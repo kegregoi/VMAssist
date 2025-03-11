@@ -48,48 +48,6 @@ trap
 }
 
 #region functions
-$MethodDefinition = @'
-    using System.Runtime.InteropServices;
-    public enum AccessType
-    {
-        DefaultProxy = 0,
-        NamedProxy = 3,
-        NoProxy = 1,
-        AutomaticProxy = 4
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct WINHTTP_PROXY_INFO
-
-    {
-        public AccessType AccessType;
-        public string Proxy;
-        public string Bypass;
-    }
-
-        public struct WinhttpCurrentUserIeProxyConfig
-    {
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-        public bool AutoDetect;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)]
-        public string AutoConfigUrl;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)]
-        public string Proxy;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)]
-        public string ProxyBypass;
-
-    }
-
-    public class WinHttp
-    {
-        [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern bool WinHttpGetDefaultProxyConfiguration(ref WINHTTP_PROXY_INFO config);
-        [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern bool WinHttpGetIEProxyConfigForCurrentUser(ref WinhttpCurrentUserIeProxyConfig pProxyConfig);
-    }
-'@
-$asm = Add-Type -TypeDefinition $MethodDefinition -PassThru -ErrorAction SilentlyContinue
-
 function Get-Age
 {
     param(
@@ -671,7 +629,7 @@ function Get-ServiceChecks
             elseif ($isInstalled -eq $true -and $isExpectedStatus -eq $false -and $isExpectedStartType -eq $false)
             {
                 New-Check -name "$name service" -result 'FAILED' -details $details
-                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "</br>The $name service is not currently $expectedStatus. Open services.msc and start the service. </br></br> We also recommend setting the 'Startup Type' of the $name service to '$expectedStartType'. Please open services.msc, double click the $name service, and change the 'Startup Type' to '$expectedStartType'"
+                New-Finding -type 'Critical' -name "$name service status $status (expected: $expectedStatus)" -description $details -mitigation "The $name service is not currently $expectedStatus. Open services.msc and start the service. </br></br> We also recommend setting the 'Startup Type' of the $name service to '$expectedStartType'. Please open services.msc, double click the $name service, and change the 'Startup Type' to '$expectedStartType'"
                 Out-Log "Status: $status (expected $expectedStatus) StartType: $startType (expected $expectedStartType)" -color Red -endLine
             }
 
@@ -2554,7 +2512,7 @@ if ($dhcpDisabledNics)
         $dhcpDisabledNicsString += "Description: $($dhcpDisabledNic.Description) Alias: $($dhcpDisabledNic.Alias) Index: $($dhcpDisabledNic.Index) IpAddress: $($dhcpDisabledNic.IpAddress)"
     }
     New-Check -name 'DHCP-assigned IP addresses' -result 'Info' -details $dhcpDisabledNicsString
-    New-Finding -type Information -name 'DHCP-disabled NICs' -description $dhcpDisabledNicsString -mitigation '</br>If your NIC only has 1 IP address then we highly recommend that the NIC does not use static IP address assignment. Instead <a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/windows-azure-guest-agent">use DHCP</a> to dynamically get the IP address that you have set on the VMs NIC in Azure. </br></br>If your NIC has multiple IP addresses then ensure you are following the <a href="https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/virtual-network-multiple-ip-addresses-portal">steps to static assign the IPs correctly</a>'
+    New-Finding -type Information -name 'DHCP-disabled NICs' -description $dhcpDisabledNicsString -mitigation 'If your NIC only has 1 IP address then we highly recommend that the NIC does not use static IP address assignment. Instead <a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/windows-azure-guest-agent">use DHCP</a> to dynamically get the IP address that you have set on the VMs NIC in Azure. </br></br>If your NIC has multiple IP addresses then ensure you are following the <a href="https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/virtual-network-multiple-ip-addresses-portal">steps to static assign the IPs correctly</a>'
 }
 else
 {
@@ -2970,6 +2928,41 @@ $css = @'
           display: none;
           overflow: hidden;
         }
+        .findings-table th:nth-child(1), .findings-table td:nth-child(1) {
+            width: 12%;
+        }
+        .findings-table th:nth-child(2), .findings-table td:nth-child(2) {
+            width: 5%;
+        }
+        .findings-table th:nth-child(3), .findings-table td:nth-child(3) {
+            width: 18%;
+        }
+        .findings-table th:nth-child(4), .findings-table td:nth-child(4) {
+            width: 25%;
+        }
+        .findings-table th:nth-child(5), .findings-table td:nth-child(5) {
+            width: 40%;
+        }
+
+        .extensions-table th:nth-child(1), .extensions-table td:nth-child(1) {
+            width: 10%;
+        }
+        .extensions-table th:nth-child(2), .extensions-table td:nth-child(2) {
+            width: 10%;
+        }
+        .extensions-table th:nth-child(3), .extensions-table td:nth-child(3) {
+            width: 10%;
+        }
+        .extensions-table th:nth-child(4), .extensions-table td:nth-child(4) {
+            width: 10%;
+        }
+        .extensions-table th:nth-child(5), .extensions-table td:nth-child(5) {
+            width: 5%;
+        }
+        .extensions-table th:nth-child(6), .extensions-table td:nth-child(6) {
+            width: 55%;
+        }
+  
     </style>
 </head>
 <body>
@@ -3075,32 +3068,23 @@ $tabs | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('<div id="Findings" class="tabcontent" style="display:block;">')
 [void]$stringBuilder.Append("<h2 id=`"findings`">Findings</h2>`r`n")
 $findingsCount = $findings | Measure-Object | Select-Object -ExpandProperty Count
+
 if ($findingsCount -ge 1)
 {
-    #<#
     foreach ($finding in $findings)
     {
         [void]$stringBuilder.Append("<button class='accordion'>$($finding.Name)</button>")
         [void]$stringBuilder.Append('<div class="panel" style="display:none;">')
         [void]$stringBuilder.Append('<p>')
-        [void]$stringBuilder.Append("<br>TimeCreated: <span style='font-weight:bold'>$($finding.TimeCreated)</span>")
-        [void]$stringBuilder.Append("<br>Type: <span style='font-weight:bold'>$($finding.Type)</span>")
-        #[void]$stringBuilder.Append("<br>Name: <span style='font-weight:bold'>$($finding.Name)</span>")
-        [void]$stringBuilder.Append("<br>Description: <span style='font-weight:bold'>$($finding.Description)</span>")
-        [void]$stringBuilder.Append("<br>Mitigation: <span style='font-weight:bold'>$($finding.Mitigation)</span>")
+        $findingsTable = $finding | ConvertTo-Html -Fragment -As Table #-PreContent "<table class='findings-table'>" -PostContent "</table>" | Out-String
+        $findingsTable = $findingsTable -replace '<table>', '<table class="findings-table">'
+        $findingsTable = $findingsTable -replace '<td>Critical</td>', '<td class="CRITICAL">Critical</td>'
+        $findingsTable = $findingsTable -replace '<td>Warning</td>', '<td class="WARNING">Warning</td>'
+        $findingsTable = $findingsTable -replace '<td>Information</td>', '<td class="INFO">Information</td>'
+        $findingsTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
         [void]$stringBuilder.Append('</p>')
         [void]$stringBuilder.Append('</div>')
     }
-    #>
-    <#
-    $findingsTable = $findings | Select-Object Type, Name, Description, Mitigation | ConvertTo-Html -Fragment -As Table
-    $findingsTable = $findingsTable -replace '<td>Critical</td>', '<td class="CRITICAL">Critical</td>'
-    $findingsTable = $findingsTable -replace '<td>Warning</td>', '<td class="WARNING">Warning</td>'
-    $findingsTable = $findingsTable -replace '<td>Information</td>', '<td class="INFORMATION">Information</td>'
-    $findingsTable = $findingsTable -replace '<td>Info</td>', '<td class="INFO">Info</td>'
-    $global:dbgFindingsTable = $findingsTable
-    $findingsTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
-    #>
 }
 else
 {
@@ -3142,13 +3126,22 @@ $vmAgentTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 
 [void]$stringBuilder.Append('<div id="Extensions" class="tabcontent">')
 $extensions = Get-Extensions
-foreach ($extension in $extensions)
+if ($extensions)
 {
-    $handlerName = $extension.handlerName
-    [void]$stringBuilder.Append("<h3>$handlerName</h3>`r`n")
-    $vmHandlerValuesTable = $extension | Select-Object handlerVersion, handlerStatus, sequenceNumber, timestampUTC, status, message | ConvertTo-Html -Fragment -As Table
-    $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
+    foreach ($extension in $extensions)
+    {
+        $handlerName = $extension.handlerName
+        [void]$stringBuilder.Append("<h3>$handlerName</h3>`r`n")
+        $vmHandlerValuesTable = $extension | Select-Object timestampUTC, handlerVersion, handlerStatus, sequenceNumber, status, message | ConvertTo-Html -Fragment -As Table
+        $vmHandlerValuesTable = $vmHandlerValuesTable -replace '<table>', '<table class="extensions-table">'
+        $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
+    }
 }
+else 
+{
+    [void]$stringBuilder.Append("<h3>No extensions detected. Either no extensions are installed or the Guest Agent isn't working</h3>`r`n")
+}
+
 [void]$stringBuilder.Append('</div>')
 
 [void]$stringBuilder.Append('<div id="Network" class="tabcontent">')
@@ -3207,6 +3200,8 @@ $wfpProvidersTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('<div id="Services" class="tabcontent">')
 $services = Get-Services
 $vmServicesTable = $services | ConvertTo-Html -Fragment -As Table
+$vmServicesTable = $vmServicesTable -replace '<td>Stopped</td>', '<td class="WARNING">Stopped</td>'
+$vmServicesTable = $vmServicesTable -replace '<td>Disabled</td>', '<td class="WARNING">Disabled</td>'
 $vmServicesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
@@ -3299,34 +3294,6 @@ if ($showReport -and (Test-Path -Path $htmFilePath -PathType Leaf))
 {
     Invoke-Item -Path $htmFilePath
 }
-
-<# Possible findings:
-1. WCF debugging enabled
-2. Application error
-3. Service terminated unexpectedly
-4. Third-party modules in process
-5. Rdagent service not installed
-6. WindowsAzureGuestAgent service not installed
-7. Rdagent service incorrect startType
-8. WindowsAzureGuestAgent service incorrect startType
-9. Rdagent service status not running
-10. WindowsAzureGuestAgent service status not running
-11. Rdagent service incorrect imagepath
-12. WindowsAzureGuestAgent service incorrect imagepath
-13. Rdagent service not installed
-14. WindowsAzureGuestAgent service not installed
-15. StdRegProv WMI class query failed
-16. VM agent not installed
-17. Proxy configured
-18. TenantEncryptionCert expired
-19. Wireserver not reachable
-20. IMDS endpoint not reachable
-21. Non-default machinekeys permissions
-22. Non-default C:\WindowsAzure permissions
-23. Non-default packages permissions
-24. System drive low disk space
-25. DHCP-disabled NICs
-#>
 
 $global:dbgOutput = $output
 $global:dbgFindings = $findings
