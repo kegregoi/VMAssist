@@ -1329,6 +1329,7 @@ if ($listFindings)
     exit
 }
 
+#Validates that script is ran as admim
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]'Administrator')
 if ($isAdmin -eq $false)
 {
@@ -2501,7 +2502,8 @@ else
     Out-Log 'Unable to query network route details because winmgmt service is not running'
 }
 
-$dhcpDisabledNics = $nics | Where-Object DHCP -EQ 'Disabled'
+$dhcpDisabledNics = $nics | Where-Object {$_.DHCP -EQ 'Disabled' -and $_.IPAddress.count -eq 1}
+
 if ($dhcpDisabledNics)
 {
     $dhcpAssignedIpAddresses = $false
@@ -2512,13 +2514,13 @@ if ($dhcpDisabledNics)
         $dhcpDisabledNicsString += "Description: $($dhcpDisabledNic.Description) Alias: $($dhcpDisabledNic.Alias) Index: $($dhcpDisabledNic.Index) IpAddress: $($dhcpDisabledNic.IpAddress)"
     }
     New-Check -name 'DHCP-assigned IP addresses' -result 'Info' -details $dhcpDisabledNicsString
-    New-Finding -type Information -name 'DHCP-disabled NICs' -description $dhcpDisabledNicsString -mitigation 'If your NIC only has 1 IP address then we highly recommend that the NIC does not use static IP address assignment. Instead <a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/windows-azure-guest-agent">use DHCP</a> to dynamically get the IP address that you have set on the VMs NIC in Azure. </br></br>If your NIC has multiple IP addresses then ensure you are following the <a href="https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/virtual-network-multiple-ip-addresses-portal">steps to static assign the IPs correctly</a>'
+    New-Finding -type Information -name 'DHCP-disabled NICs' -description $dhcpDisabledNicsString -mitigation 'If your NIC only has 1 IP address then we highly recommend that the NIC does not use static IP address assignment. Instead <a href="https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/windows-azure-guest-agent#solution-3-enable-dhcp-and-make-sure-that-the-server-isnt-blocked-by-firewalls-proxies-or-other-sources">use DHCP</a> to dynamically get the IP address that you have set on the VMs NIC in Azure.'
 }
 else
 {
     $dhcpAssignedIpAddresses = $true
     Out-Log $dhcpAssignedIpAddresses -endLine -color Green
-    $details = 'All NICs have DHCP-assigned IP addresses'
+    $details = 'All NICs with a single IP are assigned via DHCP'
     New-Check -name 'DHCP-assigned IP addresses' -result 'OK' -details $details
 }
 
@@ -3200,8 +3202,6 @@ $wfpProvidersTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('<div id="Services" class="tabcontent">')
 $services = Get-Services
 $vmServicesTable = $services | ConvertTo-Html -Fragment -As Table
-$vmServicesTable = $vmServicesTable -replace '<td>Stopped</td>', '<td class="WARNING">Stopped</td>'
-$vmServicesTable = $vmServicesTable -replace '<td>Disabled</td>', '<td class="WARNING">Disabled</td>'
 $vmServicesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
