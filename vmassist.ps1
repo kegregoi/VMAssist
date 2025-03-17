@@ -200,7 +200,7 @@ function Get-WCFConfig
         $global:dbgMachineConfigStrings = $machineConfigStrings
         $description = "$machineConfigx64FilePath shows WCF debugging is enabled:<p>$matchesString<p>"
         $global:dbgDescription = $description
-        New-Finding -type Critical -name 'WCF debugging enabled' -description $description
+        New-Finding -type Critical -name 'WCF debugging enabled' -description $description -mitigation 'We recommend only enabling WCF debugging while debugging a WCF issue. Please disable WCF debugging'
     }
     else
     {
@@ -1133,53 +1133,35 @@ public class NetAPI32{
     return $joinInfo
 }
 
-#Gets handlers listed in aggregateStatus.json and outputs an array of extensions
-function Get-Extensions
+#Gets handlers listed in aggregateStatus.json and compares them to what is in the extension config. If extension also exists in extension config then adds extension to array
+function Get-ExtensionHandlers
 {
-    $extensions = New-Object System.Collections.Generic.List[Object]
-    $extension = [PSCustomObject]@{
-        handlerName = $null; 
-        handlerVersion = $null; 
-        handlerStatus = $null; 
-        sequenceNumber = $null; 
-        timestampUTC = $null; 
-        status = $null; 
-        message = $null
-    }
+    $extensionHandlers = New-Object System.Collections.Generic.List[Object]
 
     if ($isVMAgentInstalled)
         {
-            $windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
-            $windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
-            $aggregateStatusJsonFilePath = $windowsAzureFolder | Where-Object {$_.Name -eq 'aggregatestatus.json'} | Select-Object -ExpandProperty FullName
-            $aggregateStatus = Get-Content -Path $aggregateStatusJsonFilePath
-            $aggregateStatus = $aggregateStatus -replace '\0' | ConvertFrom-Json
             $handlerKeyNames = $aggregateStatus.aggregateStatus.handlerAggregateStatus
-            
+
             foreach ($handlerKeyName in $handlerKeyNames)
             {
-                $extension.handlerName = $handlerKeyName.handlername
-                $extension.handlerVersion = $handlerKeyName.handlerVersion
-                $extension.handlerStatus = $handlerKeyName.status
-                $extension.sequenceNumber = $handlerKeyName.runtimeSettingsStatus.sequenceNumber
-                $extension.timestampUTC = $handlerKeyName.runtimeSettingsStatus.settingsStatus.timestampUTC
-                $extension.status = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.status
-                $extension.message = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.formattedMessage.message
-
-                $extensions.Add($extension)
-                $extension = [PSCustomObject]@{
-                    handlerName = $null; 
-                    handlerVersion = $null; 
-                    handlerStatus = $null; 
-                    sequenceNumber = $null; 
-                    timestampUTC = $null; 
-                    status = $null; 
-                    message = $null
+                foreach($plugin in $extensions.Plugins.Plugin.name)
+                {
+                    if($handlerKeyName.handlername -contains $plugin)
+                    {
+                        $extensionHandlers.Add([PSCustomObject]@{
+                            handlerName = $handlerKeyName.handlername; 
+                            handlerVersion = $handlerKeyName.handlerVersion; 
+                            handlerStatus = $handlerKeyName.status; 
+                            sequenceNumber = $handlerKeyName.runtimeSettingsStatus.sequenceNumber; 
+                            timestampUTC = $handlerKeyName.runtimeSettingsStatus.settingsStatus.timestampUTC; 
+                            status = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.status; 
+                            message = $handlerKeyName.runtimeSettingsStatus.settingsStatus.status.formattedMessage.message
+                        })
+                    }
                 }
-            
             }
         }    
-    return $extensions
+    return $extensionHandlers
 }
 
 #endregion functions
@@ -1350,7 +1332,9 @@ if ((Test-Path -Path $logFolderPath -PathType Container) -eq $false)
 {
     Invoke-ExpressionWithLogging "New-Item -Path $logFolderPath -ItemType Directory -Force | Out-Null" -verboseOnly
 }
+
 $computerName = [System.Net.Dns]::GetHostName()
+
 $logFilePath = "$logFolderPath\$($scriptBaseName)_$($computerName)_$($scriptStartTimeString).log"
 if ((Test-Path -Path $logFilePath -PathType Leaf) -eq $false)
 {
@@ -1363,6 +1347,7 @@ $checks = New-Object System.Collections.Generic.List[Object]
 $findings = New-Object System.Collections.Generic.List[Object]
 $vm = New-Object System.Collections.Generic.List[Object]
 
+#Gets Windows Version information
 $ErrorActionPreference = 'SilentlyContinue'
 $version = [environment]::osversion.version.ToString()
 $buildNumber = [environment]::osversion.version.build
@@ -1441,6 +1426,7 @@ $vmId = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows Azure' -ErrorAc
 
 $windowsAzureFolderPath = "$env:SystemDrive\WindowsAzure"
 
+#Creates check for the c:\WindowsAzure folder exists and if it does then check for Guest Agent .exes
 Out-Log "$windowsAzureFolderPath folder exists:" -startLine
 if (Test-Path -Path $windowsAzureFolderPath -PathType Container)
 {
@@ -1448,6 +1434,7 @@ if (Test-Path -Path $windowsAzureFolderPath -PathType Container)
     Out-Log $windowsAzureFolderExists -color Green -endLine
     New-Check -name "$windowsAzureFolderPath folder exists" -result 'OK' -details ''
     $windowsAzureFolder = Invoke-ExpressionWithLogging "Get-ChildItem -Path $windowsAzureFolderPath -Recurse -ErrorAction SilentlyContinue" -verboseOnly
+    #Creates check for WindowsAzureGuestAgent.exe existing
     Out-Log 'WindowsAzureGuestAgent.exe exists:' -startLine
     $windowsAzureGuestAgentExe = $windowsAzureFolder | Where-Object {$_.Name -eq 'WindowsAzureGuestAgent.exe'}
     if ($windowsAzureGuestAgentExe)
@@ -1463,7 +1450,7 @@ if (Test-Path -Path $windowsAzureFolderPath -PathType Container)
         $windowsAzureGuestAgentExe = $false
         Out-Log $windowsAzureGuestAgentExeExists -color Red -endLine
     }
-
+    #Creates check for WaAppAgent.exe existing
     Out-Log 'WaAppAgent.exe exists:' -startLine
     $waAppAgentExe = $windowsAzureFolder | Where-Object {$_.Name -eq 'WaAppAgent.exe'}
     if ($waAppAgentExe)
@@ -1550,45 +1537,47 @@ Get-ApplicationErrors -Name 'WindowsAzureGuestAgent'
 # TODO: WS25+ no longer include WMIC.exe (<WS25 versions have it in C:\Windows\System32\wbem\WMIC.exe), so need to use a different approach here
 # It can be installed as a feature-on-demand in WS25, but since it'll ultimately even that won't an option, but to address this now
 # https://learn.microsoft.com/en-us/windows-server/get-started/removed-deprecated-features-windows-server-2025#features-were-no-longer-developing
-Out-Log 'StdRegProv WMI class:' -startLine
-if ($winmgmt.Status -eq 'Running')
-{
-    if ($fakeFinding)
+if ($productName.Contains("2008") -or $productName.Contains("2012") -or $productName.Contains("2016") -or $productName.Contains("2019") -or $productName.Contains("2022")) {
+    Out-Log 'StdRegProv WMI class:' -startLine
+    if ($winmgmt.Status -eq 'Running')
     {
-        # Using intentionally wrong class name NOTStdRegProv in order to generate a finding on-demand without having to change any config
-        $stdRegProv = Invoke-ExpressionWithLogging "wmic /namespace:\\root\default Class NOTStdRegProv Call GetDWORDValue hDefKey='&H80000002' sSubKeyName='SYSTEM\CurrentControlSet\Services\Winmgmt' sValueName=Start 2>`$null" -verboseOnly
+        if ($fakeFinding)
+        {
+            # Using intentionally wrong class name NOTStdRegProv in order to generate a finding on-demand without having to change any config
+            $stdRegProv = Invoke-ExpressionWithLogging "wmic /namespace:\\root\default Class NOTStdRegProv Call GetDWORDValue hDefKey='&H80000002' sSubKeyName='SYSTEM\CurrentControlSet\Services\Winmgmt' sValueName=Start 2>`$null" -verboseOnly
+        }
+        else
+        {
+            $stdRegProv = Invoke-ExpressionWithLogging "wmic /namespace:\\root\default Class StdRegProv Call GetDWORDValue hDefKey='&H80000002' sSubKeyName='SYSTEM\CurrentControlSet\Services\Winmgmt' sValueName=Start 2>`$null" -verboseOnly
+        }
+
+        $wmicExitCode = $LASTEXITCODE
+        if ($wmicExitCode -eq 0)
+        {
+            $stdRegProvQuerySuccess = $true
+            Out-Log $stdRegProvQuerySuccess -color Green -endLine
+            New-Check -name 'StdRegProv WMI class' -result 'OK' -details ''
+        }
+        else
+        {
+            $stdRegProvQuerySuccess = $false
+            Out-Log $stdRegProvQuerySuccess -color Red -endLine
+            New-Check -name 'StdRegProv WMI class' -result 'FAILED' -details ''
+            $description = "StdRegProv WMI class query failed with error code $wmicExitCode"
+            New-Finding -type Critical -name 'StdRegProv WMI class query failed' -description $description -mitigation ''
+        }
     }
     else
     {
-        $stdRegProv = Invoke-ExpressionWithLogging "wmic /namespace:\\root\default Class StdRegProv Call GetDWORDValue hDefKey='&H80000002' sSubKeyName='SYSTEM\CurrentControlSet\Services\Winmgmt' sValueName=Start 2>`$null" -verboseOnly
-    }
-
-    $wmicExitCode = $LASTEXITCODE
-    if ($wmicExitCode -eq 0)
-    {
-        $stdRegProvQuerySuccess = $true
-        Out-Log $stdRegProvQuerySuccess -color Green -endLine
-        New-Check -name 'StdRegProv WMI class' -result 'OK' -details ''
-    }
-    else
-    {
-        $stdRegProvQuerySuccess = $false
-        Out-Log $stdRegProvQuerySuccess -color Red -endLine
-        New-Check -name 'StdRegProv WMI class' -result 'FAILED' -details ''
-        $description = "StdRegProv WMI class query failed with error code $wmicExitCode"
-        New-Finding -type Critical -name 'StdRegProv WMI class query failed' -description $description -mitigation ''
+        $details = 'Skipped (Winmgmt service not running)'
+        New-Check -name 'StdRegProv WMI class' -result 'Skipped' -details $details
+        Out-Log $details -endLine
     }
 }
-else
-{
-    $details = 'Skipped (Winmgmt service not running)'
-    New-Check -name 'StdRegProv WMI class' -result 'Skipped' -details $details
-    Out-Log $details -endLine
-}
 
+#Check to see if the Guest Agent is installed by validating if the c:\WindowsAzure folder, rdagent service, windowsazureguestagent service, waappagent.exe, and windowsazureguestagent.exe exist. Returns $true if installed
 Out-Log 'VM Agent installed:' -startLine
-# $detailsSuffix = "(windowsAzureFolderExists:$windowsAzureFolderExists rdAgentServiceExists:$rdAgentServiceExists windowsAzureGuestAgentServiceExists:$windowsAzureGuestAgentServiceExists rdAgentKeyExists:$rdAgentKeyExists windowsAzureGuestAgentKeyExists:$windowsAzureGuestAgentKeyExists waAppAgentExeExists:$waAppAgentExeExists windowsAzureGuestAgentExeExists:$windowsAzureGuestAgentExeExists)"
-# if ($windowsAzureFolderExists -and $rdAgentServiceExists -and $windowsAzureGuestAgentServiceExists -and $rdAgentKeyExists -and $windowsAzureGuestAgentKeyExists -and $waAppAgentExeExists -and $windowsAzureGuestAgentExeExists -and $windowsAzureGuestAgentKeyExists -and $windowsAzureGuestAgentKeyExists)
+
 $detailsSuffix = "$windowsAzureFolderPath exists: $([bool]$windowsAzureFolder), WaAppAgent.exe in $($windowsAzureFolderPath): $([bool]$waAppAgentExe), WindowsAzureGuestAgent.exe in $($windowsAzureFolderPath): $([bool]$windowsAzureGuestAgentExe), RdAgent service installed: $([bool]$rdagent), WindowsAzureGuestAgent service installed: $([bool]$windowsAzureGuestAgent)"
 if ([bool]$windowsAzureFolder -and [bool]$rdagent -and [bool]$windowsAzureGuestAgent -and [bool]$waAppAgentExe -and [bool]$windowsAzureGuestAgentExe)
 {
@@ -1606,6 +1595,7 @@ else
     New-Finding -type Critical -Name 'VM agent not installed' -description $details -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-windows#manual-installation">Install the VM Guest Agent</a>'
 }
 
+#Checks if the Guest Agent was installed by .MSI or at VM provisioning
 if ($isVMAgentInstalled)
 {
     Out-Log 'VM agent installed by provisioning agent or Windows Installer package (MSI):' -startLine
@@ -1628,6 +1618,7 @@ if ($isVMAgentInstalled)
     }
 }
 
+#Checks if the Guest Agent is at or above the minimum supported version
 Out-Log 'VM agent is supported version:' -startLine
 if ($isVMAgentInstalled)
 {
@@ -1668,6 +1659,7 @@ else
     Out-Log $details -endLine
 }
 
+#Gathers information on the Guest Agent
 if ($isVMAgentInstalled)
 {
     $guestAgentKeyPath = 'HKLM:\SOFTWARE\Microsoft\GuestAgent'
@@ -1862,6 +1854,7 @@ else
     Out-Log $proxyConfigured -color Green -endLine
 }
 
+#Checks for the CRP certificate
 Out-Log 'TenantEncryptionCert installed:' -startLine
 if ($isVMAgentInstalled)
 {
@@ -1960,6 +1953,7 @@ else
     New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service">Ensure that there is network connectivity to 169.254.169.254 (IMDS) on port 80.</a>'
     }
 
+#Gathers VM data from IMDS
 if ($imdsReachable.Succeeded)
 {
     Out-Log 'IMDS endpoint 169.254.169.254:80 returned expected result:' -startLine
@@ -2061,22 +2055,7 @@ if ($imdsReachable.Succeeded)
     }
 }
 
-<#  Moved "isAzureVM" check earlier so it can be used as a conditional for other checks
-if ($imdsReachable.Succeeded -eq $false)
-{
-    Out-Log 'DHCP request returns option 245:' -startLine
-    $dhcpReturnedOption245 = Confirm-AzureVM
-    if ($dhcpReturnedOption245)
-    {
-        Out-Log $dhcpReturnedOption245 -color Green -endLine
-    }
-    else
-    {
-        Out-Log $dhcpReturnedOption245 -color Yellow -endLine
-    }
-}
-#>
-
+#If Guest Agent is installed and can reach the wireserver then gather data from aggregateStatus.json and from the goalState
 if ($wireserverPort80Reachable.Succeeded -and $wireserverPort32526Reachable.Succeeded -and $isVMAgentInstalled)
 {
     Out-Log 'Getting status from aggregatestatus.json' -verboseOnly
@@ -2122,12 +2101,14 @@ if ($wireserverPort80Reachable.Succeeded -and $wireserverPort32526Reachable.Succ
     $inVMGoalStateMetaData = $extensions.InVMGoalStateMetaData
 }
 
+#Checks if 3rd party modules are loaded in Guest Agent processes
 if ($isVMAgentInstalled)
 {
     Get-ThirdPartyLoadedModules -processName 'WaAppAgent'
     Get-ThirdPartyLoadedModules -processName 'WindowsAzureGuestAgent'
 }
 
+#Gets firewall rules/wfp filters
 if ($skipFirewall -eq $false)
 {
     $enabledFirewallRules = Get-EnabledFirewallRules
@@ -2137,6 +2118,7 @@ if ($showFilters -eq $true)
     $wfpFilters = Get-WfpFilters
 }
 
+#Validates permissions on the MachineKeys folder
 $machineKeysDefaultSddl = 'O:SYG:SYD:PAI(A;;0x12019f;;;WD)(A;;FA;;;BA)'
 Out-Log 'MachineKeys folder has default permissions:' -startLine
 $machineKeysPath = 'C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys'
@@ -2199,6 +2181,7 @@ else
     Out-Log $details -endLine
 }
 
+#Validates permissions on the Packages folder
 $packagesFolderPath = "$env:SystemDrive\Packages"
 Out-Log "$packagesFolderPath folder has default permissions:" -startLine
 if ($isVMAgentInstalled)
@@ -2232,6 +2215,7 @@ else
     Out-Log $details -endLine
 }
 
+#Validates that there is enough free space on the OS disk
 Out-Log 'System drive has sufficient disk space:' -startLine
 $systemDriveLetter = "$env:SystemDrive" -split ':' | Select-Object -First 1
 $systemDrive = Invoke-ExpressionWithLogging "Get-PSDrive -Name $systemDriveLetter" -verboseOnly
@@ -2292,7 +2276,7 @@ $scriptTimespan = New-TimeSpan -Start $scriptStartTime -End $scriptEndTime
 $scriptDurationSeconds = $scriptTimespan.Seconds
 $scriptDuration = '{0:hh}:{0:mm}:{0:ss}.{0:ff}' -f $scriptTimespan
 
-# General
+# General VM data
 $vm.Add([PSCustomObject]@{Property = 'scriptDurationSeconds'; Value = $scriptDurationSeconds; Type = 'General'})
 $vm.Add([PSCustomObject]@{Property = 'azEnvironment'; Value = $azEnvironment; Type = 'General'})
 $vm.Add([PSCustomObject]@{Property = 'location'; Value = $location; Type = 'General'})
@@ -2336,6 +2320,7 @@ $vm.Add([PSCustomObject]@{Property = 'joinType'; Value = $joinType; Type = 'OS'}
 $vm.Add([PSCustomObject]@{Property = 'role'; Value = $role; Type = 'OS'})
 $vm.Add([PSCustomObject]@{Property = 'timeZone'; Value = $timeZone; Type = 'OS'})
 
+#Gathers inforamtion on network interfaces and checks if DHCP is enabled on the NIC if it only has 1 IP
 Out-Log 'DHCP-assigned IP addresses:' -startLine
 
 $nics = New-Object System.Collections.Generic.List[Object]
@@ -2747,6 +2732,7 @@ $output = [PSCustomObject]@{
     scriptDuration                                        = $scriptDuration
 }
 
+#Creates HTML/CSS for the html report
 $css = @'
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -3048,6 +3034,7 @@ https://www.w3schools.com/howto/howto_js_accordion.asp
 #>
 $css | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 
+#Write system info to the top of the html file
 if ($computerName)
 {
     [void]$stringBuilder.Append("Host Name: <span style='font-weight:bold'>$computerName</span>")
@@ -3067,6 +3054,7 @@ if ($resourceId)
 [void]$stringBuilder.Append("<br>Report Created: <span style='font-weight:bold'>$scriptEndTimeUTCString</span> Duration: <span style='font-weight:bold'>$scriptDuration</span><p>")
 
 $tabs | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
+#Adds any findings to the html file
 [void]$stringBuilder.Append('<div id="Findings" class="tabcontent" style="display:block;">')
 [void]$stringBuilder.Append("<h2 id=`"findings`">Findings</h2>`r`n")
 $findingsCount = $findings | Measure-Object | Select-Object -ExpandProperty Count
@@ -3078,7 +3066,7 @@ if ($findingsCount -ge 1)
         [void]$stringBuilder.Append("<button class='accordion'>$($finding.Name)</button>")
         [void]$stringBuilder.Append('<div class="panel" style="display:none;">')
         [void]$stringBuilder.Append('<p>')
-        $findingsTable = $finding | ConvertTo-Html -Fragment -As Table #-PreContent "<table class='findings-table'>" -PostContent "</table>" | Out-String
+        $findingsTable = $finding | ConvertTo-Html -Fragment -As Table 
         $findingsTable = $findingsTable -replace '<table>', '<table class="findings-table">'
         $findingsTable = $findingsTable -replace '<td>Critical</td>', '<td class="CRITICAL">Critical</td>'
         $findingsTable = $findingsTable -replace '<td>Warning</td>', '<td class="WARNING">Warning</td>'
@@ -3090,9 +3078,9 @@ if ($findingsCount -ge 1)
 }
 else
 {
-    [void]$stringBuilder.Append("<h3>No issues found. VM agent is healthy.</h3>`r`n")
+    [void]$stringBuilder.Append("<h3>No issues detected</h3>`r`n")
 }
-
+#Adds the list of checks as a table
 $checksTable = $checks | Select-Object Name, Result, Details | ConvertTo-Html -Fragment -As Table
 $checksTable = $checksTable -replace '<td>Info</td>', '<td class="INFO">Info</td>'
 $checksTable = $checksTable -replace '<td>Passed</td>', '<td class="PASSED">Passed</td>'
@@ -3125,16 +3113,16 @@ $vmSecurityTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 $vmAgentTable = $vm | Where-Object {$_.Type -eq 'Agent'} | Select-Object Property, Value | ConvertTo-Html -Fragment -As Table
 $vmAgentTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
-
+#Populates extension tab with installed extensions
 [void]$stringBuilder.Append('<div id="Extensions" class="tabcontent">')
-$extensions = Get-Extensions
-if ($extensions)
+$extensionHandlers = Get-ExtensionHandlers
+if ($extensionHandlers)
 {
-    foreach ($extension in $extensions)
+    foreach ($extensionHandler in $extensionHandlers)
     {
-        $handlerName = $extension.handlerName
+        $handlerName = $extensionHandler.handlerName
         [void]$stringBuilder.Append("<h3>$handlerName</h3>`r`n")
-        $vmHandlerValuesTable = $extension | Select-Object timestampUTC, handlerVersion, handlerStatus, sequenceNumber, status, message | ConvertTo-Html -Fragment -As Table
+        $vmHandlerValuesTable = $extensionHandler | Select-Object timestampUTC, handlerVersion, handlerStatus, sequenceNumber, status, message | ConvertTo-Html -Fragment -As Table
         $vmHandlerValuesTable = $vmHandlerValuesTable -replace '<table>', '<table class="extensions-table">'
         $vmHandlerValuesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
     }
@@ -3145,7 +3133,7 @@ else
 }
 
 [void]$stringBuilder.Append('</div>')
-
+#Populates the Network tab
 [void]$stringBuilder.Append('<div id="Network" class="tabcontent">')
 [void]$stringBuilder.Append("<h4>NIC Details</h4>`r`n")
 $vmNetworkTable = $nics | ConvertTo-Html -Fragment -As Table
@@ -3199,12 +3187,14 @@ $wfpProvidersTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 }
 [void]$stringBuilder.Append('</div>')
 
+#Populates Services tab
 [void]$stringBuilder.Append('<div id="Services" class="tabcontent">')
 $services = Get-Services
 $vmServicesTable = $services | ConvertTo-Html -Fragment -As Table
 $vmServicesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
+#Populates Drivers tab
 [void]$stringBuilder.Append('<div id="Drivers" class="tabcontent">')
 [void]$stringBuilder.Append("<h3 id=`"vmThirdpartyRunningDrivers`">Third-party Running Drivers</h3>`r`n")
 $vmthirdPartyRunningDriversTable = $drivers.thirdPartyRunningDrivers | ConvertTo-Html -Fragment -As Table
@@ -3221,17 +3211,21 @@ $vmMicrosoftRunningDriversTable = $drivers.microsoftRunningDrivers | ConvertTo-H
 $vmMicrosoftRunningDriversTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
+<# Revisit outputting disk info from IMDS
 [void]$stringBuilder.Append('<div id="Disk" class="tabcontent">')
 [void]$stringBuilder.Append("<h3 id=`"vmStorage`">Storage</h3>`r`n")
 $vmStorageTable = $vm | Where-Object {$_.Type -eq 'Storage'} | Select-Object Property, Value | ConvertTo-Html -Fragment -As Table
 $vmStorageTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
+#>
 
+#Populates Software tab
 [void]$stringBuilder.Append('<div id="Software" class="tabcontent">')
 $vmSoftwareTable = $software | ConvertTo-Html -Fragment -As Table
 $vmSoftwareTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
 [void]$stringBuilder.Append('</div>')
 
+#Populates Updates tab
 [void]$stringBuilder.Append('<div id="Updates" class="tabcontent">')
 $vmUpdatesTable = $updates | ConvertTo-Html -Fragment -As Table
 $vmUpdatesTable | ForEach-Object {[void]$stringBuilder.Append("$_`r`n")}
