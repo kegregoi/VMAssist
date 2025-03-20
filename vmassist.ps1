@@ -1913,29 +1913,50 @@ $description = "Wireserver endpoint 168.63.129.16:80 reachable: $($wireserverPor
 $mitigation = '<a href="https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16">Ensure that there is network connectivity to 168.63.129.16 on ports 80 and 32526.</a>'
 if ($wireserverPort80Reachable.Succeeded)
 {
-    New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'OK' -details ''
+    New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'OK' -details 'Successfully connected to 168.63.129.16:80'
     Out-Log "$($wireserverPort80Reachable.Succeeded) $($wireserverPort80Reachable.Error)" -color Green -endLine
 }
 else
 {
-    New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'FAILED' -details ''
-    Out-Log $wireserverPort80Reachable.Succeeded -color Red -endLine
+    New-Check -name 'Wireserver endpoint 168.63.129.16:80 reachable' -result 'FAILED' -details $($wireserverPort80Reachable.Error)
+    Out-Log "$($wireserverPort80Reachable.Succeeded)" -color Red -endLine
     New-Finding -type Critical -name 'Wireserver endpoint 168.63.129.16:80 not reachable' -description $description -mitigation $mitigation
 }
 
 Out-Log 'Wireserver endpoint 168.63.129.16:32526 reachable:' -startLine
 $wireserverPort32526Reachable = Test-Port -ipAddress '168.63.129.16' -port 32526 -timeout 1000
-$description = "Wireserver endpoint 168.63.129.16:32526 reachable: $($wireserverPort32526Reachable.Succeeded) $($wireserverPort80Reachable.Error)"
+$description = "Wireserver endpoint 168.63.129.16:32526 reachable: $($wireserverPort32526Reachable.Succeeded) $($wireserverPort32526Reachable.Error)"
 if ($wireserverPort32526Reachable.Succeeded)
 {
-    New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'OK' -details ''
+    New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'OK' -details 'Successfully connected to 168.63.129.16:32526'
     Out-Log $wireserverPort32526Reachable.Succeeded -color Green -endLine
 }
 else
 {
-    New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'FAILED' -details ''
-    Out-Log "$($wireserverPort32526Reachable.Succeeded) $($wireserverPort80Reachable.Error)" -color Red -endLine
+    New-Check -name 'Wireserver endpoint 168.63.129.16:32526 reachable' -result 'FAILED' -details $($wireserverPort32526Reachable.Error)
+    Out-Log "$($wireserverPort32526Reachable.Succeeded)" -color Red -endLine
     New-Finding -type Critical -name 'Wireserver endpoint 168.63.129.16:32526 not reachable' -description $description -mitigation $mitigation
+}
+
+Out-Log 'Wireserver endpoint http://168.63.129.16/?comp=versions reachable:' -startLine
+try {
+    $exception = $null
+    $wireRest = Invoke-RestMethod -Headers @{"Metadata"="true"} -Method GET -Uri http://168.63.129.16/?comp=versions 
+}
+catch {
+    $exception = $_.Exception.InnerException.Message.ToString()
+}
+
+if(!$exception)
+{
+    New-Check -name 'Wireserver endpoint http://168.63.129.16/?comp=versions reachable' -result 'OK' -details 'Successfully connected to http://168.63.129.16/?comp=versions'
+    Out-Log $true -color Green -endLine
+}
+else
+{
+    New-Check -name 'Wireserver endpoint http://168.63.129.16/?comp=versions not reachable' -result 'FAILED' -details $exception
+    Out-Log $false -color Red -endLine
+    New-Finding -type Critical -name 'Wireserver endpoint http://168.63.129.16/?comp=versions not reachable' -description $exception -mitigation $mitigation
 }
 
 Out-Log 'IMDS endpoint 169.254.169.254:80 reachable:' -startLine
@@ -1943,12 +1964,12 @@ $imdsReachable = Test-Port -ipAddress '169.254.169.254' -port 80 -timeout 1000
 $description = "IMDS endpoint 169.254.169.254:80 reachable: $($imdsReachable.Succeeded) $($imdsReachable.Error)"
 if ($imdsReachable.Succeeded)
 {
-    New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'OK' -details ''
+    New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'OK' -details 'Successfully connected to 169.254.169.254:80'
     Out-Log $imdsReachable.Succeeded -color Green -endLine
 }
 else
 {
-    New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'FAILED' -details ''
+    New-Check -name 'IMDS endpoint 169.254.169.254:80 reachable' -result 'FAILED' -details $($imdsReachable.Error)
     Out-Log "$($imdsReachable.Succeeded) $($imdsReachable.Error)" -color Red -endLine
     New-Finding -type Information -name 'IMDS endpoint 169.254.169.254:80 not reachable' -description $description -mitigation '<a href="https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service">Ensure that there is network connectivity to 169.254.169.254 (IMDS) on port 80.</a>'
     }
