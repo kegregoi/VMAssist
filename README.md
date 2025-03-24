@@ -1,6 +1,6 @@
 # VM assist
 
-VM assist is a PowerShell script intended to be used to diagnose issues with the Azure VM Guest Agent in a Windows Azure VM. It will also gather various information about the system such as firewall rules, running services, running drivers, installed software, NIC settings, and installed software, and installed Windows Updates.
+VM assist (Windows version) is a PowerShell script intended to be used to diagnose issues with the Azure Windows VM Guest Agent in addition to other issues related to the general health of the VM. This includes various information about the system such as firewall rules, running services, running drivers, installed software, NIC settings, and installed software, and installed Windows Updates.
 
 Output of the checks can be viewed in the PowerShell window the script is ran in. Additionally running VM assist generates a detailed .htm report showing the results of each check it performs and suggests mitigations for issues it finds.
 
