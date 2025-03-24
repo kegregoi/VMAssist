@@ -411,7 +411,7 @@ function Get-ThirdPartyLoadedModules
                     $details = "$($($processThirdPartyModules.ModuleName -join ',').TrimEnd(','))"
                     New-Check -name "Third-party modules in $processName" -result 'Info' -details $details
                     Out-Log $true -endLine -color Cyan
-                    New-Finding -type Information -name "Third-party modules in $processName" -description $details -mitigation 'Third-party .dlls have been put in the Guest Agent process. Other applications occasionally do this and it will not necessarily cause the Guest Agent to fail. However, it is possible that these .dlls can cause unexpected failures in the Guest Agent that are difficult to debug. If any of these .dlls are from unexpected applications then consider removing/reconfiguring the application so that it no longer injects its .dlls into the Guest Agent.'
+                    New-Finding -type Information -name "Third-party modules in $processName" -description $details -mitigation "Third-party .dlls have been put in the $processName process. Other applications occasionally do this and it will not necessarily cause the Guest Agent to fail. However, it is possible that these .dlls can cause unexpected failures in the Guest Agent that are difficult to debug. Although it is relatively rare that these cause an issue, if any of these .dlls are from unexpected applications and you've exhausted traditional troubleshooting methods then consider removing/reconfiguring the application so that it no longer injects its .dlls into the $processName process."
                 }
                 else
                 {
